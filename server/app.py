@@ -16,7 +16,6 @@ import logging
 import logging.handlers
 import os
 import os.path as op
-import json
 import tornado.httpserver
 import sys
 import ssl
@@ -250,7 +249,7 @@ class BaseHandler(tornado.web.RequestHandler):
         log.info("setDeaultAcl -- userid: " + str(self.userid))
         if self.userid <= 0:
             raise HTTPError(500, "Expected userid")
-        username = getUserName(self.userid)
+        username = auth.getUserName(self.userid)
         filePath = tocUtil.getTocFilePath(username)
         try:
             fileUtil.verifyFile(filePath)
@@ -259,10 +258,10 @@ class BaseHandler(tornado.web.RequestHandler):
             return
         try:
             with Hdf5db(filePath, app_logger=self.log) as db:
-                rootUUID = db.getUUIDByPath('/')
-                current_user_acl = db.getAcl(rootUUID, self.userid)
+                # rootUUID = db.getUUIDByPath('/')
+                # current_user_acl = db.getAcl(rootUUID, self.userid)
                 acl = db.getDefaultAcl()
-                acl['userid'] = userid
+                acl['userid'] = self.userid
                 fields = ('create', 'read', 'update', 'delete', 'readACL',
                           'updateACL')
                 for field in fields:
@@ -632,13 +631,13 @@ class LinkHandler(BaseHandler):
             body = json_decode(self.request.body)
         except ValueError as e:
             msg = "JSON Parser Error: " + e.message
-            log.info(msg)
+            self.log.info(msg)
             raise HTTPError(400, reason=msg)
 
         childUuid = None
         h5path = None
         h5domain = None
-        filename = None   # fake filename
+        # filename = None   # fake filename
 
         if "id" in body:
             childUuid = body["id"]
@@ -867,7 +866,7 @@ class AclHandler(BaseHandler):
             req_uuid = self.getRequestId()
 
         rootUUID = None
-        filePath = self.getFilePath(self.domain)
+        # filePath = self.getFilePath(self.domain)
         userName = self.getName()
 
         col_name = self.getRequestCollectionName()
@@ -884,7 +883,7 @@ class AclHandler(BaseHandler):
                     self.log.info(msg)
                     raise HTTPError(404, reason=msg)
 
-        request = {}
+        # request = {}
         acl = None
         current_user_acl = None
         try:
@@ -1635,7 +1634,7 @@ class ValueHandler(BaseHandler):
                 limit = int(limit)  # convert to int
             except ValueError as e:
                 msg = "invalid Limit: " + e.message
-                log.info(msg)
+                self.log.info(msg)
                 raise HTTPError(400, msg)
 
         if query_selection:
@@ -1706,7 +1705,7 @@ class ValueHandler(BaseHandler):
 
                 else:
                     msg = "Internal Server Error: unexpected shape class: " + \
-                        shape['class']
+                        item_shape['class']
                     self.log.error(msg)
                     raise HTTPError(500, reason=msg)
 
@@ -1868,7 +1867,7 @@ class ValueHandler(BaseHandler):
                 msg = "JSON Parser Error: " + e.message
             except AttributeError:
                 msg = "JSON Parser Error"
-            log.info(msg)
+            self.log.info(msg)
             raise HTTPError(400, reason=msg)
 
         if "value" in body:
@@ -1911,7 +1910,7 @@ class ValueHandler(BaseHandler):
 
         try:
             with Hdf5db(self.filePath, app_logger=self.log) as db:
-                rootUUID = db.getUUIDByPath('/')
+                # rootUUID = db.getUUIDByPath('/')
                 acl = db.getAcl(self.reqUuid, self.userid)
 
                 # throws exception is unauthorized
@@ -2020,7 +2019,7 @@ class AttributeHandler(BaseHandler):
 
         npos = uri.find('/')
         if npos < 0:
-            log.info("bad uri")
+            self.log.info("bad uri")
             raise HTTPError(400)
         uri = uri[(npos+1):]
         npos = uri.find('/')  # second '/'
@@ -2051,7 +2050,7 @@ class AttributeHandler(BaseHandler):
             try:
                 limit = int(limit)
             except ValueError:
-                log.info("expected int type for limit")
+                self.log.info("expected int type for limit")
                 raise HTTPError(400)
         marker = self.get_query_argument("Marker", None)
 
@@ -2080,9 +2079,9 @@ class AttributeHandler(BaseHandler):
         if attr_name is not None:
             self_uri += '/' + url_escape(attr_name)
 
-        hostQuery = ''
-        if self.get_query_argument("host", default=None):
-            hostQuery = "?host=" + self.get_query_argument("host")
+        # hostQuery = ''
+        # if self.get_query_argument("host", default=None):
+        #     hostQuery = "?host=" + self.get_query_argument("host")
 
         responseItems = []
         for item in items:
@@ -2118,7 +2117,7 @@ class AttributeHandler(BaseHandler):
         else:
             if len(responseItems) == 0:
                 # should have raised exception earlier
-                log.error("attribute not found: " + attr_name)
+                self.log.error("attribute not found: " + attr_name)
                 raise HTTPError(404)
             responseItem = responseItems[0]
             for k in responseItem:
@@ -2136,7 +2135,7 @@ class AttributeHandler(BaseHandler):
         attr_name = self.getRequestName()
         if attr_name is None:
             msg = "Bad Request: attribute name not supplied"
-            log.info(msg)
+            self.log.info(msg)
             raise HTTPError(400, reason=msg)
 
         body = None
@@ -2243,7 +2242,7 @@ class AttributeHandler(BaseHandler):
             msg = "Bad Request: attribute name not specified"
             self.log.info(msg)
             raise HTTPError(400, reason=msg)
-        filePath = self.getFilePath(self.domain)
+        self.filePath = self.getFilePath(self.domain)
         self.isWritable(self.filePath)
 
         response = {}
@@ -2383,7 +2382,7 @@ class GroupCollectionHandler(BaseHandler):
             try:
                 limit = int(limit)
             except ValueError:
-                log.info("expected int type for limit")
+                self.log.info("expected int type for limit")
                 raise HTTPError(400)
         marker = self.get_query_argument("Marker", None)
 
@@ -2554,7 +2553,7 @@ class DatasetCollectionHandler(BaseHandler):
 
         if self.request.uri != '/datasets':
             msg = "Method not Allowed: invalid datasets post request"
-            log.info(msg)
+            self.log.info(msg)
             raise HTTPError(405, reason=msg)  # Method not allowed
 
         self.isWritable(self.filePath)
@@ -2615,7 +2614,7 @@ class DatasetCollectionHandler(BaseHandler):
                 pass  # can use as is
             else:
                 msg = "Bad Request: maxdims is invalid"
-                log.info(msg)
+                self.log.info(msg)
                 raise HTTPError(400, reason=msg)
 
         # validate shape
@@ -2722,7 +2721,7 @@ class TypeCollectionHandler(BaseHandler):
                 limit = int(limit)
             except ValueError:
                 msg = "Bad Request: expected int type for Limit"
-                log.info(msg)
+                self.log.info(msg)
                 raise HTTPError(400, reason=msg)
         marker = self.get_query_argument("Marker", None)
 
@@ -2762,7 +2761,7 @@ class TypeCollectionHandler(BaseHandler):
 
         if self.request.uri != '/datatypes':
             msg = "Method not Allowed: invalid URI"
-            log.info(msg)
+            self.log.info(msg)
             raise HTTPError(405, reason=msg)  # Method not allowed
 
         self.isWritable(self.filePath)
@@ -2900,7 +2899,7 @@ class RootHandler(BaseHandler):
                 return
             raise e  # re-throw the exception
 
-        root_uuid = response['root']
+        # root_uuid = response['root']
 
         self.set_header('Content-Type', 'application/json')
         self.write(json_encode(response))
@@ -3175,7 +3174,8 @@ def updateToc(filepath):
             tocUtil.addTocEntry(base_domain, filepath)
         else:
             tocUtil.removeTocEntry(base_domain, filepath)
-    except IOError as e:
+    # except IOError as e:
+    except IOError:
         log.info("periodic callback: unable to update toc")
 
 
