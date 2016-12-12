@@ -10,11 +10,6 @@
 # request a copy from help@hdfgroup.org.                                     #
 ##############################################################################
 
-import six
-
-if six.PY3:
-    unicode = str
-    
 import time
 import signal
 import logging
@@ -27,24 +22,24 @@ import sys
 import ssl
 import base64
 import binascii
-if six.PY3:
-    from queue import Queue
-else:
-    from Queue import Queue
 from tornado.ioloop import IOLoop
 from tornado.web import RequestHandler, Application, url, HTTPError
 from tornado.escape import json_encode, json_decode, url_escape, url_unescape
-
 from h5json import Hdf5db
 import h5json
-
 import config
 from timeUtil import unixTimeToUTC
-import fileUtil  
-import tocUtil  
+import fileUtil
+import tocUtil
 from httpErrorUtil import errNoToHttpStatus
-from h5watchdog import h5observe  
+from h5watchdog import h5observe
 from passwordUtil import getAuthClient
+import six
+if six.PY3:
+    unicode = str
+    from queue import Queue
+else:
+    from Queue import Queue
 
 
 def to_bytes(a_string):
@@ -52,12 +47,14 @@ def to_bytes(a_string):
         return a_string.encode('utf-8')
     else:
         return a_string
-        
+
+
 def to_str(a_string):
     if type(a_string) is bytes:
         return a_string.decode('utf-8')
     else:
         return a_string
+
 
 class DefaultHandler(RequestHandler):
     def put(self):
@@ -98,10 +95,10 @@ class BaseHandler(tornado.web.RequestHandler):
         cors_domain = config.get('cors_domain')
         if cors_domain:
             self.set_header('Access-Control-Allow-Origin', cors_domain)
-     
+
     """
     Set allows heards per CORS policy
-    """        
+    """
     def options(self):
         cors_domain = config.get('cors_domain')
         if cors_domain:
@@ -129,7 +126,7 @@ class BaseHandler(tornado.web.RequestHandler):
         if user and pswd:
             # throws exception if passwd is not valid
             self.username = user
-            self.userid = auth.validateUserPassword(user, pswd)  
+            self.userid = auth.validateUserPassword(user, pswd)
             return self.userid
         else:
             self.username = None
@@ -149,7 +146,7 @@ class BaseHandler(tornado.web.RequestHandler):
             raise HTTPError(401, "Unauthorized")
             # raise HTTPError(401, message="provide  password")
         # validated user, but doesn't have access
-        
+
         self.log.info("unauthorized access for userid: " + str(self.userid))
         raise HTTPError(403, "Access is not permitted")
 
@@ -157,22 +154,22 @@ class BaseHandler(tornado.web.RequestHandler):
     baseHandler - log request and set state to be used by method implementation
     """
     def baseHandler(self, checkExists=True):
-         
+
         # Output request URI to log
         self.log = logging.getLogger("h5serv")
-        
+
         protocol = self.request.protocol
         if "X-Forwarded-Proto" in self.request.headers:
             protocol = self.request.headers["X-Forwarded-Proto"]
-        
+
         host = self.request.host
         if "X-Forwarded-Host" in self.request.headers:
             host = self.request.headers["X-Forwarded-Host"]
-        
-        #domain_encoded = self.get_argument("host")
-        #print("domain_encoded: ", domain_encoded)
+
+        # domain_encoded = self.get_argument("host")
+        # print("domain_encoded: ", domain_encoded)
         self.domain = self.get_query_argument("host", default=None)
-         
+
         if not self.domain:
             self.domain = host
         remote_ip = self.request.remote_ip
@@ -180,11 +177,11 @@ class BaseHandler(tornado.web.RequestHandler):
             remote_ip = self.request.headers["X-Real-Ip"]
 
         # sets self.userid, self.username
-        self.get_current_user()  
+        self.get_current_user()
         self.reqUuid = self.getRequestId()
         self.filePath = self.getFilePath(self.domain, checkExists)
-         
-        self.href = protocol + '://' + host 
+
+        self.href = protocol + '://' + host
         self.log.info("baseHandler, href: " + self.href)
         msg = "REQ " + self.request.method + " " + self.href + self.request.uri
         msg += " {remote_ip: " + remote_ip
@@ -207,7 +204,7 @@ class BaseHandler(tornado.web.RequestHandler):
         if "X-Forwarded-Host" in self.request.headers:
             host = self.request.headers["X-Forwarded-Host"]
         hostQuery = self.get_query_argument("host", default=None)
-        
+
         targetHostQuery = ''
 
         # url encode the domain
@@ -218,24 +215,24 @@ class BaseHandler(tornado.web.RequestHandler):
         else:
             target += domain
 
-        if h5path is None or h5path == '/':   
+        if h5path is None or h5path == '/':
             target += '/'
         else:
             target += '/#h5path(' + h5path + ')'
         target += targetHostQuery
-        
+
         return target
 
     """
     Convience method to compute href links
     """
     def getHref(self, uri, query=None):
-        href = self.href + '/' + uri  
+        href = self.href + '/' + uri
         delimiter = '?'
         if self.get_query_argument("host", default=None):
-            href  += "?host=" + self.nameEncode(self.get_query_argument("host"))
+            href += "?host=" + self.nameEncode(self.get_query_argument("host"))
             delimiter = '&'
-            
+
         if query is not None:
             if type(query) is str:
                 href += delimiter + query
@@ -245,8 +242,7 @@ class BaseHandler(tornado.web.RequestHandler):
                     href += delimiter + item
                     delimiter = '&'
         return href
-            
-        
+
     def setDefaultAcl(self):
         """ Set default ACL for user TOC file.
         """
@@ -267,21 +263,22 @@ class BaseHandler(tornado.web.RequestHandler):
                 current_user_acl = db.getAcl(rootUUID, self.userid)
                 acl = db.getDefaultAcl()
                 acl['userid'] = userid
-                fields = ('create', 'read', 'update', 'delete', 'readACL', 'updateACL')  
+                fields = ('create', 'read', 'update', 'delete', 'readACL',
+                          'updateACL')
                 for field in fields:
-                    acl[field] = True 
+                    acl[field] = True
                 db.setAcl(obj_uuid, acl)
-                     
+
         except IOError as e:
             log.info("IOError: " + str(e.errno) + " " + e.strerror)
             status = errNoToHttpStatus(e.errno)
             raise HTTPError(status, reason=e.strerror)
-         
-        
+
     def getFilePath(self, domain, checkExists=True):
         """ Helper method - return file path for given domain.
         """
-        self.log.info("getFilePath: " + domain + " checkExists: " + str(checkExists))
+        self.log.info("getFilePath: " + domain + " checkExists: " +
+                      str(checkExists))
         tocFilePath = fileUtil.getTocFilePathForDomain(domain, auth)
         self.log.info("tocFilePath: " + tocFilePath)
         if not fileUtil.isFile(tocFilePath):
@@ -290,24 +287,27 @@ class BaseHandler(tornado.web.RequestHandler):
                 # setup the permision to grant this user exclusive write access
                 # and public read for everyone
                 self.setDefaultAcl()
-    
+
         filePath = fileUtil.getFilePath(domain, auth)
 
-        # convert any "%2E" substrings with "." (since dot isn't allowed for domain name)
-        filePath = self.nameDecode(filePath)  
-         
+        # convert any "%2E" substrings with "." (since dot isn't allowed for
+        # domain name)
+        filePath = self.nameDecode(filePath)
+
         if checkExists:
             while True:
                 if fileUtil.isFile(filePath):
                     break
-                # Unfortunately the host query parameter substitues '/' for "%2E",
-                # so check to see if any slashes should really be dots.
-                # clients should prefer using the host header if this is an issue
+                # Unfortunately the host query parameter substitues '/' for
+                # "%2E", so check to see if any slashes should really be dots.
+                # clients should prefer using the host header if this is an
+                # issue
                 self.log.info("filePath: " + filePath + " not found")
                 host_query = self.get_query_argument("host", default=None)
                 if host_query is None:
-                    # If using host header, we don't need to guess about the %2E substitution
-                    break  
+                    # If using host header, we don't need to guess about the
+                    # %2E substitution
+                    break
                 if domain.find('.') > -1:
                     domain = domain.replace('.', '%2E', 1)
                     try:
@@ -318,16 +318,16 @@ class BaseHandler(tornado.web.RequestHandler):
                     filePath = self.nameDecode(filePath)
                 else:
                     break
-            self.log.info("verifyFile: " + filePath)    
-            fileUtil.verifyFile(filePath)  # throws exception if not found  
-        
+            self.log.info("verifyFile: " + filePath)
+            fileUtil.verifyFile(filePath)  # throws exception if not found
+
         return filePath
-        
+
     def isWritable(self, filePath):
         """Helper method - raise 403 error if given file path is not writable
         """
         fileUtil.verifyFile(filePath, writable=True)
-        
+
     def isTocFilePath(self, filePath):
         """Helper method - return True if this is a TOC file apth
         """
@@ -336,22 +336,22 @@ class BaseHandler(tornado.web.RequestHandler):
         else:
             return False
 
-  
     def nameDecode(self, name):
         """
         Helper function - convert url-encoded name to orignal format
         """
-        name =  name.replace('%2E', '.')
+        name = name.replace('%2E', '.')
         return name
 
     def nameEncode(self, name):
-      
+
         """
         Helper function - convert name to url-friendly format
         Replaces all non-alphanumeric characters with '%<ascii_hex>'
         """
-         
-        valid_chars = ['-', '.', '_', '~', ':', '/', '?', '#', '[', ']', '@', '!', '$', '&', "'", '(', ')', '*', '+', ',', ';', '=']
+
+        valid_chars = ['-', '.', '_', '~', ':', '/', '?', '#', '[', ']', '@',
+                       '!', '$', '&', "'", '(', ')', '*', '+', ',', ';', '=']
         out = []
         for ch in name:
             if ch.isalnum():
@@ -359,7 +359,8 @@ class BaseHandler(tornado.web.RequestHandler):
             elif ch == ' ':
                 out.append('+')
             elif ch == '%':
-                # pass through encoded chars ('%xx' where xx are hexidecimal values)
+                # pass through encoded chars ('%xx' where xx are hexidecimal
+                # values)
                 out.append(ch)
             elif ch in valid_chars:
                 # other valid url chars
@@ -367,9 +368,8 @@ class BaseHandler(tornado.web.RequestHandler):
             else:
                 hex = format(ord(ch), '02X')
                 out.append('%' + hex)
-         
+
         return ''.join(out)
-            
 
     def getRequestId(self):
         """
@@ -381,7 +381,6 @@ class BaseHandler(tornado.web.RequestHandler):
         extract the <uuid> and return it.
         Throw 500 error is the URI is not in the above form
         """
-    
 
         uri = self.request.uri
 
@@ -398,9 +397,9 @@ class BaseHandler(tornado.web.RequestHandler):
             uri = uri[len('/datatypes/'):]  # get stuff after /datatypes/
         else:
 
-            #msg = "unexpected uri: " + uri
-            #self.log.error(msg)
-            #raise HTTPError(500, reason=msg)
+            # msg = "unexpected uri: " + uri
+            # self.log.error(msg)
+            # raise HTTPError(500, reason=msg)
 
             return None
         npos = uri.find('/')
@@ -416,11 +415,10 @@ class BaseHandler(tornado.web.RequestHandler):
         self.log.info('got uuid: [' + uuid + ']')
 
         return uuid
-        
+
     """
-    Get requested content type.  Returns either "binary" if the accept header is 
-    octet stream, otherwise json.
-    Currently does not support q fields.
+    Get requested content type.  Returns either "binary" if the accept header
+    is octet stream, otherwise json.  Currently does not support q fields.
     """
     def getAcceptType(self):
         content_type = self.request.headers.get('Accept')
@@ -429,7 +427,8 @@ class BaseHandler(tornado.web.RequestHandler):
         if content_type == "application/octet-stream":
             return "binary"
         else:
-            return "json"       
+            return "json"
+
 
 class LinkCollectionHandler(BaseHandler):
     def get(self):
@@ -454,8 +453,11 @@ class LinkCollectionHandler(BaseHandler):
             with Hdf5db(self.filePath, app_logger=self.log) as db:
                 rootUUID = db.getUUIDByPath('/')
                 current_user_acl = db.getAcl(self.reqUuid, self.userid)
-                self.verifyAcl(current_user_acl, 'read')  # throws exception is unauthorized
-                items = db.getLinkItems(self.reqUuid, marker=marker, limit=limit)
+
+                # throws exception is unauthorized
+                self.verifyAcl(current_user_acl, 'read')
+                items = db.getLinkItems(self.reqUuid, marker=marker,
+                                        limit=limit)
 
         except IOError as e:
             self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
@@ -465,10 +467,10 @@ class LinkCollectionHandler(BaseHandler):
         # got everything we need, put together the response
         links = []
         hrefs = []
-        
+
         hostQuery = ''
         if self.get_query_argument("host", default=None):
-            hostQuery = "?host=" + self.get_query_argument("host") 
+            hostQuery = "?host=" + self.get_query_argument("host")
 
         hrefs.append({
             'rel': 'self',
@@ -478,11 +480,14 @@ class LinkCollectionHandler(BaseHandler):
             link_item = {}
             link_item['class'] = item['class']
             link_item['title'] = item['title']
-            link_item['href'] = item['href'] = self.href + '/groups/' + self.reqUuid + '/links/' + self.nameEncode(item['title']) + hostQuery
+            link_item['href'] = item['href'] = self.href + '/groups/' + \
+                self.reqUuid + '/links/' + self.nameEncode(item['title']) + \
+                hostQuery
             if item['class'] == 'H5L_TYPE_HARD':
                 link_item['id'] = item['id']
                 link_item['collection'] = item['collection']
-                link_item['target'] = self.href + '/' + item['collection'] + '/' + item['id'] + hostQuery
+                link_item['target'] = self.href + '/' + item['collection'] + \
+                    '/' + item['id'] + hostQuery
             elif item['class'] == 'H5L_TYPE_SOFT':
                 link_item['h5path'] = item['h5path']
             elif item['class'] == 'H5L_TYPE_EXTERNAL':
@@ -490,8 +495,8 @@ class LinkCollectionHandler(BaseHandler):
                 h5domain = self.nameEncode(item['file'])
                 link_item['h5domain'] = h5domain
                 if link_item['h5domain'].endswith(config.get('domain')):
-                    link_item['target'] = self.getExternalHref(h5domain, link_item['h5path'])
-                    
+                    link_item['target'] = self.getExternalHref(
+                        h5domain, link_item['h5path'])
 
             links.append(link_item)
 
@@ -502,8 +507,7 @@ class LinkCollectionHandler(BaseHandler):
             'href': self.getHref('groups/' + rootUUID)
         })
         home_dir = config.get("home_dir")
-        hrefs.append({'rel': home_dir, 'href': self.getHref('')
-        })
+        hrefs.append({'rel': home_dir, 'href': self.getHref('')})
         hrefs.append({
             'rel': 'owner',
             'href': self.getHref('groups/' + self.reqUuid)
@@ -539,15 +543,15 @@ class LinkHandler(BaseHandler):
         if npos >= 0:
             # trim off the query params
             linkName = linkName[:npos]
-        
+
         linkName = url_unescape(linkName)
         return linkName
 
     def get(self):
         self.baseHandler()
-         
+
         linkName = self.getName(self.request.uri)
-       
+
         self.log.info("linkName:["+linkName+"]")
 
         response = {}
@@ -581,11 +585,12 @@ class LinkHandler(BaseHandler):
         hrefs = []
         hrefs.append({
             'rel': 'self',
-            'href': self.getHref('groups/' + self.reqUuid + '/links/' + url_escape(linkName)) 
+            'href': self.getHref('groups/' + self.reqUuid + '/links/' +
+                                 url_escape(linkName))
         })
         hrefs.append({
             'rel': 'root',
-            'href': self.getHref( 'groups/' + rootUUID)
+            'href': self.getHref('groups/' + rootUUID)
         })
         hrefs.append({
             'rel': 'home', 'href': self.getHref('')
@@ -613,8 +618,7 @@ class LinkHandler(BaseHandler):
 
     def put(self):
         self.baseHandler()
-         
-        
+
         # put - create a new link
         # patterns are:
         # PUT /groups/<id>/links/<name> {id: <id> }
@@ -656,7 +660,6 @@ class LinkHandler(BaseHandler):
             self.log.info(msg)
             raise HTTPError(400, reasoln=msg)
 
-         
         if self.isTocFilePath(self.filePath):
             msg = "Forbidden: links can not be directly created in TOC domain"
             self.log.info(msg)
@@ -669,7 +672,9 @@ class LinkHandler(BaseHandler):
             with Hdf5db(self.filePath, app_logger=self.log) as db:
                 rootUUID = db.getUUIDByPath('/')
                 acl = db.getAcl(self.reqUuid, self.userid)
-                self.verifyAcl(acl, 'create')  # throws exception is unauthorized
+
+                # throws exception is unauthorized
+                self.verifyAcl(acl, 'create')
                 try:
                     existingItem = db.getLinkItemByUuid(self.reqUuid, linkName)
                     if existingItem:
@@ -684,7 +689,8 @@ class LinkHandler(BaseHandler):
                 if childUuid:
                     db.linkObject(self.reqUuid, childUuid, linkName)
                 elif h5domain:
-                    db.createExternalLink(self.reqUuid, h5domain, h5path, linkName)
+                    db.createExternalLink(self.reqUuid, h5domain, h5path,
+                                          linkName)
                 elif h5path:
                     db.createSoftLink(self.reqUuid, h5path, linkName)
 
@@ -694,10 +700,11 @@ class LinkHandler(BaseHandler):
             raise HTTPError(status, reason=e.strerror)
 
         hrefs = []
-         
+
         hrefs.append({
             'rel': 'self',
-            'href': self.getHref('groups/' + self.reqUuid + '/links/' + url_escape(linkName))
+            'href': self.getHref('groups/' + self.reqUuid + '/links/' +
+                                 url_escape(linkName))
         })
         hrefs.append({
             'rel': 'root',
@@ -708,7 +715,7 @@ class LinkHandler(BaseHandler):
             'href': self.getHref('')
         })
         hrefs.append({
-            'rel': 'owner', 'href': self.getHref('groups/' + self.reqUuid) })
+            'rel': 'owner', 'href': self.getHref('groups/' + self.reqUuid)})
         response['hrefs'] = hrefs
 
         self.set_header('Content-Type', 'application/json')
@@ -717,12 +724,12 @@ class LinkHandler(BaseHandler):
 
     def delete(self):
         self.baseHandler()
-         
+
         linkName = self.getName(self.request.uri)
 
         response = {}
         rootUUID = None
-    
+
         self.isWritable(self.filePath)
         if self.isTocFilePath(self.filePath):
             msg = "Forbidden: links can not be directly modified in TOC domain"
@@ -732,7 +739,9 @@ class LinkHandler(BaseHandler):
             with Hdf5db(self.filePath, app_logger=self.log) as db:
                 rootUUID = db.getUUIDByPath('/')
                 acl = db.getAcl(self.reqUuid, self.userid)
-                self.verifyAcl(acl, 'delete')  # throws exception is unauthorized
+
+                # throws exception is unauthorized
+                self.verifyAcl(acl, 'delete')
                 db.unlinkItem(self.reqUuid, linkName)
         except IOError as e:
             self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
@@ -740,7 +749,7 @@ class LinkHandler(BaseHandler):
             raise HTTPError(status, reason=e.strerror)
 
         hrefs = []
-        
+
         hrefs.append({
             'rel': 'root',
             'href': self.getHref('groups/' + rootUUID)
@@ -756,9 +765,10 @@ class LinkHandler(BaseHandler):
 
 class AclHandler(BaseHandler):
     def getRequestCollectionName(self):
-        # request is in the form /(datasets|groups|datatypes)/<id>/acls(/<username>),
-        # or /acls(/<username>) for domain acl
-        # return datasets | groups | datatypes
+        # request is in the form
+        # /(datasets|groups|datatypes)/<id>/acls(/<username>), or
+        # /acls(/<username>) for domain acl return datasets | groups |
+        # datatypes
         uri = self.request.uri
 
         npos = uri.find('/')
@@ -781,7 +791,8 @@ class AclHandler(BaseHandler):
         if col_name not in ('datasets', 'groups', 'datatypes'):
             msg = "Internal Server Error: collection name unexpected"
             self.log.error(msg)
-            raise HTTPError(500, reason=msg)   # shouldn't get routed here in this case
+            # shouldn't get routed here in this case
+            raise HTTPError(500, reason=msg)
 
         return col_name
 
@@ -839,7 +850,8 @@ class AclHandler(BaseHandler):
                     else:
                         user_name = auth.getUserName(userid)
                         if user_name is None:
-                            self.log.warning("user not found for userid: " + str(userid))
+                            self.log.warning("user not found for userid: " +
+                                             str(userid))
                     acl_out['userName'] = user_name
                 else:
                     value = acl_in[key]
@@ -848,7 +860,7 @@ class AclHandler(BaseHandler):
 
     def get(self):
         self.baseHandler()
-         
+
         req_uuid = None
         if not self.request.uri.startswith("/acls"):
             # get UUID for object unless this is a get on domain acl
@@ -884,7 +896,9 @@ class AclHandler(BaseHandler):
                     obj_uuid = rootUUID
 
                 current_user_acl = db.getAcl(obj_uuid, self.userid)
-                self.verifyAcl(current_user_acl, 'readACL')  # throws exception is unauthorized
+
+                # throws exception is unauthorized
+                self.verifyAcl(current_user_acl, 'readACL')
                 if req_userid is None:
                     acl = db.getAcls(obj_uuid)
                 else:
@@ -905,12 +919,13 @@ class AclHandler(BaseHandler):
             response['acl'] = acl
 
         hrefs = []
-         
+
         if current_user_acl:
             if userName:
                 hrefs.append({
                     'rel': 'self',
-                    'href': self.getHref(col_name + '/' + obj_uuid + '/acls/' + url_escape(userName))
+                    'href': self.getHref(col_name + '/' + obj_uuid +
+                                         '/acls/' + url_escape(userName))
                 })
             else:
                 hrefs.append({
@@ -939,7 +954,7 @@ class AclHandler(BaseHandler):
 
     def put(self):
         self.baseHandler()
-         
+
         # put - create/update an acl
         # patterns are:
         # PUT /group/<id>/acls/<name> {'read': True, 'write': False }
@@ -1005,7 +1020,9 @@ class AclHandler(BaseHandler):
                 else:
                     obj_uuid = req_uuid
                 current_user_acl = db.getAcl(obj_uuid, self.userid)
-                self.verifyAcl(current_user_acl, 'updateACL')  # throws exception is unauthorized
+
+                # throws exception is unauthorized
+                self.verifyAcl(current_user_acl, 'updateACL')
                 db.setAcl(obj_uuid, acl)
         except IOError as e:
             self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
@@ -1013,14 +1030,15 @@ class AclHandler(BaseHandler):
             raise HTTPError(status, reason=e.strerror)
 
         hrefs = []
-         
+
         hrefs.append({
             'rel': 'self',
-            'href': self.getHref(col_name + '/' + obj_uuid + '/acls/' + url_escape(userName))
+            'href': self.getHref(col_name + '/' + obj_uuid + '/acls/' +
+                                 url_escape(userName))
         })
         hrefs.append({
             'rel': 'root', 'href': self.getHref('groups/' + rootUUID)})
-        hrefs.append({'rel': 'home', 'href': self.getHref('') })
+        hrefs.append({'rel': 'home', 'href': self.getHref('')})
         hrefs.append({
             'rel': 'owner',
             'href': self.getHref(col_name + '/' + obj_uuid)
@@ -1036,12 +1054,11 @@ class AclHandler(BaseHandler):
 class TypeHandler(BaseHandler):
     def get(self):
         self.baseHandler()
-         
+
         if not self.reqUuid:
             msg = "Bad Request: id is not specified"
             self.log.info(msg)
             raise HTTPError(400, reason=msg)
-         
 
         response = {}
         hrefs = []
@@ -1059,7 +1076,7 @@ class TypeHandler(BaseHandler):
             raise HTTPError(status, reason=e.strerror)
 
         # got everything we need, put together the response
-         
+
         hrefs.append({
             'rel': 'self',
             'href': self.getHref('datatypes/' + self.reqUuid)
@@ -1093,7 +1110,9 @@ class TypeHandler(BaseHandler):
             with Hdf5db(self.filePath, app_logger=self.log) as db:
                 rootUUID = db.getUUIDByPath('/')
                 acl = db.getAcl(self.reqUuid, self.userid)
-                self.verifyAcl(acl, 'delete')  # throws exception is unauthorized
+
+                # throws exception is unauthorized
+                self.verifyAcl(acl, 'delete')
                 db.deleteObjectByUuid('datatype', self.reqUuid)
         except IOError as e:
             self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
@@ -1101,7 +1120,7 @@ class TypeHandler(BaseHandler):
             raise HTTPError(status, reason=e.strerror)
 
         # got everything we need, put together the response
-         
+
         hrefs.append({'rel': 'self', 'href': self.getHref('datatypes')})
         hrefs.append({'rel': 'home', 'href': self.getHref('')})
         hrefs.append({
@@ -1116,7 +1135,7 @@ class TypeHandler(BaseHandler):
 class DatatypeHandler(BaseHandler):
     def get(self):
         self.baseHandler()
-        
+
         response = {}
         hrefs = []
         rootUUID = None
@@ -1133,7 +1152,7 @@ class DatatypeHandler(BaseHandler):
             raise HTTPError(status, reason=e.strerror)
 
         # got everything we need, put together the response
-         
+
         hrefs.append({
             'rel': 'self',
             'href': self.getHref('datasets/' + self.reqUuid + '/type')
@@ -1154,7 +1173,7 @@ class ShapeHandler(BaseHandler):
 
     def get(self):
         self.baseHandler()
-         
+
         response = {}
         hrefs = []
         rootUUID = None
@@ -1172,7 +1191,7 @@ class ShapeHandler(BaseHandler):
             raise HTTPError(status, reason=e.strerror)
 
         # got everything we need, put together the response
-         
+
         hrefs.append({
             'rel': 'self', 'href': self.getHref('datasets/' + self.reqUuid)})
         hrefs.append({
@@ -1190,7 +1209,7 @@ class ShapeHandler(BaseHandler):
 
     def put(self):
         self.baseHandler()
-         
+
         self.isWritable(self.filePath)
 
         response = {}
@@ -1235,7 +1254,9 @@ class ShapeHandler(BaseHandler):
             with Hdf5db(self.filePath, app_logger=self.log) as db:
                 rootUUID = db.getUUIDByPath('/')
                 acl = db.getAcl(self.reqUuid, self.userid)
-                self.verifyAcl(acl, 'update')  # throws exception is unauthorized
+
+                # throws exception is unauthorized
+                self.verifyAcl(acl, 'update')
                 db.resizeDataset(self.reqUuid, shape)
         except IOError as e:
             self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
@@ -1244,7 +1265,7 @@ class ShapeHandler(BaseHandler):
 
         self.log.info("resize OK")
         # put together the response
-         
+
         hrefs.append({
             'rel': 'self', 'href': self.getHref('datasets/' + self.reqUuid)})
         hrefs.append({
@@ -1261,12 +1282,12 @@ class ShapeHandler(BaseHandler):
 class DatasetHandler(BaseHandler):
 
     def getDatasetNumElements(self, shape_item):
-        
+
         if shape_item['class'] == 'H5S_SCALAR':
             return 1
         elif shape_item['class'] != 'H5S_SIMPLE':
             return 0
-        
+
         dims = shape_item['dims']
         rank = len(dims)
         if rank == 0:
@@ -1276,7 +1297,6 @@ class DatasetHandler(BaseHandler):
         for i in range(rank):
             count *= dims[i]
         return count
-
 
     def getPreviewQuery(self, shape_item):
         """Helper method - return query options for a "reasonable" size
@@ -1320,7 +1340,7 @@ class DatasetHandler(BaseHandler):
 
     def get(self):
         self.baseHandler()
-         
+
         response = {}
         hrefs = []
         rootUUID = None
@@ -1338,7 +1358,7 @@ class DatasetHandler(BaseHandler):
 
         # got everything we need, put together the response
         count = self.getDatasetNumElements(item['shape'])
-         
+
         if count <= 100:
             # small number of values, provide link to entire dataset
             hrefs.append({
@@ -1350,9 +1370,9 @@ class DatasetHandler(BaseHandler):
             previewQuery = self.getPreviewQuery(item['shape'])
             hrefs.append({
                 'rel': 'preview',
-                'href': self.getHref('datasets/' + self.reqUuid + '/value', query=previewQuery)
+                'href': self.getHref('datasets/' + self.reqUuid + '/value',
+                                     query=previewQuery)
             })
-        
 
         hrefs.append({
             'rel': 'self', 'href': self.getHref('datasets/' + self.reqUuid)})
@@ -1362,7 +1382,7 @@ class DatasetHandler(BaseHandler):
             'rel': 'attributes',
             'href': self.getHref('datasets/' + self.reqUuid + '/attributes')
         })
-        
+
         hrefs.append({'rel': 'home', 'href': self.getHref('')})
         response['id'] = self.reqUuid
         typeItem = item['type']
@@ -1384,7 +1404,7 @@ class DatasetHandler(BaseHandler):
 
     def delete(self):
         self.baseHandler()
-         
+
         self.isWritable(self.filePath)
 
         response = {}
@@ -1395,7 +1415,9 @@ class DatasetHandler(BaseHandler):
             with Hdf5db(self.filePath, app_logger=self.log) as db:
                 rootUUID = db.getUUIDByPath('/')
                 acl = db.getAcl(self.reqUuid, self.userid)
-                self.verifyAcl(acl, 'delete')  # throws exception is unauthorized
+
+                # throws exception is unauthorized
+                self.verifyAcl(acl, 'delete')
                 db.deleteObjectByUuid('dataset', self.reqUuid)
         except IOError as e:
             self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
@@ -1430,7 +1452,7 @@ class ValueHandler(BaseHandler):
             start and end: n:m
             start, end, and stride: n:m:s
         """
-        
+
         # Get optional query parameters for given dim
         self.log.info("getSliceQueryParam: " + str(dim) + ", " + str(extent))
         query = self.get_query_argument("select", default='ALL')
@@ -1467,7 +1489,8 @@ class ValueHandler(BaseHandler):
             try:
                 start = int(dim_query)
             except ValueError:
-                msg = "Bad Request: invalid selection parameter (can't convert to int) for dimension: " + str(dim)
+                msg = "Bad Request: invalid selection parameter " +\
+                    "(can't convert to int) for dimension: " + str(dim)
                 self.log.info(msg)
                 raise HTTPError(400, reason=msg)
             stop = start
@@ -1477,7 +1500,8 @@ class ValueHandler(BaseHandler):
         else:
             fields = dim_query.split(":")
             if len(fields) > 3:
-                msg = "Bad Request: Too many ':' seperators for dimension: " + str(dim)
+                msg = "Bad Request: Too many ':' seperators for dimension: " \
+                    + str(dim)
                 self.log.info(msg)
                 raise HTTPError(400, reason=msg)
             try:
@@ -1488,20 +1512,24 @@ class ValueHandler(BaseHandler):
                 if len(fields) > 2 and fields[2]:
                     step = int(fields[2])
             except ValueError:
-                msg = "Bad Request: invalid selection parameter (can't convert to int) for dimension: " + str(dim)
+                msg = "Bad Request: invalid selection parameter (can't " + \
+                    "convert to int) for dimension: " + str(dim)
                 self.log.info(msg)
                 raise HTTPError(400, reason=msg)
 
         if start < 0 or start > extent:
-            msg = "Bad Request: Invalid selection start parameter for dimension: " + str(dim)
+            msg = "Bad Request: Invalid selection start parameter for" + \
+                "dimension: " + str(dim)
             self.log.info(msg)
             raise HTTPError(400, reason=msg)
         if stop > extent:
-            msg = "Bad Request: Invalid selection stop parameter for dimension: " + str(dim)
+            msg = "Bad Request: Invalid selection stop parameter for " + \
+                "dimension: " + str(dim)
             self.log.info(msg)
             raise HTTPError(400, reason=msg)
         if step <= 0:
-            msg = "Bad Request: invalid selection step parameter for dimension: " + str(dim)
+            msg = "Bad Request: invalid selection step parameter for " + \
+                "dimension: " + str(dim)
             self.log.info(msg)
             raise HTTPError(400, reason=msg)
         s = slice(start, stop, step)
@@ -1519,12 +1547,14 @@ class ValueHandler(BaseHandler):
             if type(start) is not list:
                 start = [start]
             if len(start) != rank:
-                msg = "Bad Request: start array length not equal to dataset rank"
+                msg = "Bad Request: start array length not equal to " + \
+                    "dataset rank"
                 self.log.info(msg)
                 raise HTTPError(400, reason=msg)
             for dim in range(rank):
                 if start[dim] < 0 or start[dim] >= dsetshape[dim]:
-                    msg = "Bad Request: start index invalid for dim: " + str(dim)
+                    msg = "Bad Request: start index invalid for dim: " + \
+                        str(dim)
                     self.log.info(msg)
                     raise HTTPError(400, reason=msg)
         else:
@@ -1536,12 +1566,14 @@ class ValueHandler(BaseHandler):
             if type(stop) is not list:
                 stop = [stop]
             if len(stop) != rank:
-                msg = "Bad Request: stop array length not equal to dataset rank"
+                msg = "Bad Request: stop array length not equal to dataset" + \
+                    "rank"
                 self.log.info(msg)
                 raise HTTPError(400, reason=msg)
             for dim in range(rank):
                 if stop[dim] <= start[dim] or stop[dim] > dsetshape[dim]:
-                    msg = "Bad Request: stop index invalid for dim: " + str(dim)
+                    msg = "Bad Request: stop index invalid for dim: " + \
+                        str(dim)
                     self.log.info(msg)
                     raise HTTPError(400, reason=msg)
         else:
@@ -1553,12 +1585,14 @@ class ValueHandler(BaseHandler):
             if type(step) is not list:
                 step = [step]
             if len(step) != rank:
-                msg = "Bad Request: step array length not equal to dataset rank"
+                msg = "Bad Request: step array length not equal to dataset" + \
+                    "rank"
                 self.log.info(msg)
                 raise HTTPError(400, reason=msg)
             for dim in range(rank):
                 if step[dim] <= 0 or step[dim] > dsetshape[dim]:
-                    msg = "Bad Request: step index invalid for dim: " + str(dim)
+                    msg = "Bad Request: step index invalid for dim: " + \
+                        str(dim)
                     self.log.info(msg)
                     raise HTTPError(400, reason=msg)
         else:
@@ -1579,11 +1613,11 @@ class ValueHandler(BaseHandler):
 
     def get(self):
         self.baseHandler()
-         
+
         request_content_type = self.getAcceptType()
         response_content_type = "json"
         self.log.info("contenttype:" + request_content_type)
-         
+
         response = {}
         hrefs = []
         rootUUID = None
@@ -1603,7 +1637,7 @@ class ValueHandler(BaseHandler):
                 msg = "invalid Limit: " + e.message
                 log.info(msg)
                 raise HTTPError(400, msg)
-                
+
         if query_selection:
             self.log.info("query: " + query_selection)
 
@@ -1614,24 +1648,25 @@ class ValueHandler(BaseHandler):
                 self.verifyAcl(acl, 'read')  # throws exception is unauthorized
                 item = db.getDatasetItemByUuid(self.reqUuid)
                 item_type = item['type']
-                
+
                 if item_type['class'] == 'H5T_OPAQUE':
                     # TODO - support for returning OPAQUE data...
                     msg = "Not Implemented: GET OPAQUE data not supported"
                     self.log.info(msg)
                     raise HTTPError(501, reason=msg)  # Not implemented
                 elif item_type['class'] != 'H5T_COMPOUND' and query_selection:
-                    msg = "Bad Request: query selection is only supported for compound types"
+                    msg = "Bad Request: query selection is only supported " + \
+                        "for compound types"
                     self.log.info(msg)
                     raise HTTPError(400, reason=msg)
-            
-                
+
                 item_shape = item['shape']
                 if item_shape['class'] == 'H5S_NULL':
                     pass   # don't return a value
                 elif item_shape['class'] == 'H5S_SCALAR':
                     if query_selection:
-                        msg = "Bad Request: query selection not valid with scalar dataset"
+                        msg = "Bad Request: query selection not valid with" + \
+                            " scalar dataset"
                         self.log.info(msg)
                         raise HTTPError(400, reason=msg)
                     values = db.getDatasetValuesByUuid(self.reqUuid, Ellipsis)
@@ -1639,7 +1674,8 @@ class ValueHandler(BaseHandler):
                     dims = item_shape['dims']
                     rank = len(dims)
                     if query_selection and rank != 1:
-                        msg = "Bad Request: query selection is only supported for "
+                        msg = "Bad Request: query selection is only " + \
+                            "supported for "
                         msg += "one dimensional datasets"
                         self.log.info(msg)
                         raise HTTPError(400, reason=msg)
@@ -1652,20 +1688,25 @@ class ValueHandler(BaseHandler):
                         start = slices[0].start
                         stop = slices[0].stop
                         step = slices[0].step
-                        (indexes, values) = db.doDatasetQueryByUuid(self.reqUuid, query_selection, start=start, stop=stop, step=step, limit=limit)
+                        (indexes, values) = db.doDatasetQueryByUuid(
+                            self.reqUuid, query_selection, start=start,
+                            stop=stop, step=step, limit=limit)
                     else:
                         if request_content_type == "binary":
                             self.log.info("nelements:" + str(nelements))
                             itemSize = h5json.getItemSize(item_type)
                             if itemSize != "H5T_VARIABLE" and nelements > 1:
                                 response_content_type = "binary"
-                       
-                        self.log.info("response_content_type: " + response_content_type)
+
+                        self.log.info("response_content_type: " +
+                                      response_content_type)
                         values = db.getDatasetValuesByUuid(
-                            self.reqUuid, tuple(slices), format=response_content_type)      
-                         
+                            self.reqUuid, tuple(slices),
+                            format=response_content_type)
+
                 else:
-                    msg = "Internal Server Error: unexpected shape class: " + shape['class']
+                    msg = "Internal Server Error: unexpected shape class: " + \
+                        shape['class']
                     self.log.error(msg)
                     raise HTTPError(500, reason=msg)
 
@@ -1675,25 +1716,24 @@ class ValueHandler(BaseHandler):
             status = errNoToHttpStatus(e.errno)
             raise HTTPError(status, reason=e.strerror)
 
-         
         # got everything we need, put together the response
-        
+
         if response_content_type == "binary":
             # binary transfer, just write the bytes and return
             self.log.info("writing binary stream")
             self.set_header('Content-Type', 'application/octet-stream')
             self.write(values)
             return
-            
+
         if request_content_type == "binary":
-            #unable to return binary data
-            self.log.info("requested binary response, but returning JSON instead")
-            
-        
+            # unable to return binary data
+            self.log.info("requested binary response, but returning JSON " +
+                          "instead")
+
         selfQuery = []
         if self.get_query_argument("select", default=''):
             selfQuery.append('select=' + self.get_query_argument("select"))
-        if self.get_query_argument("query", default=''):     
+        if self.get_query_argument("query", default=''):
             selfQuery.append('query=' + self.get_query_argument(
                 "select", default=''))
 
@@ -1701,13 +1741,14 @@ class ValueHandler(BaseHandler):
             response['value'] = values
         else:
             response['value'] = None
-            
+
         if indexes is not None:
             response['index'] = indexes
 
         hrefs.append({
             'rel': 'self',
-            'href': self.getHref('datasets/' + self.reqUuid + '/value', query=selfQuery)
+            'href': self.getHref('datasets/' + self.reqUuid + '/value',
+                                 query=selfQuery)
         })
         hrefs.append({
             'rel': 'root', 'href': self.getHref('groups/' + rootUUID)})
@@ -1722,7 +1763,7 @@ class ValueHandler(BaseHandler):
 
     def post(self):
         self.baseHandler()
-         
+
         body = None
         try:
             body = json_decode(self.request.body)
@@ -1755,31 +1796,37 @@ class ValueHandler(BaseHandler):
                 item = db.getDatasetItemByUuid(self.reqUuid)
                 shape = item['shape']
                 if shape['class'] == 'H5S_SCALAR':
-                    msg = "Bad Request: point selection is not supported on scalar datasets"
+                    msg = "Bad Request: point selection is not supported " + \
+                        "on scalar datasets"
                     self.log.info(msg)
                     raise HTTPError(400, reason=msg)
                 if shape['class'] == 'H5S_NULL':
-                    msg = "Bad Request: point selection is not supported on Null Space datasets"
+                    msg = "Bad Request: point selection is not supported " + \
+                        "on Null Space datasets"
                     self.log.info(msg)
                     raise HTTPError(400, reason=msg)
-                
+
                 rank = len(shape['dims'])
 
                 for point in points:
                     if rank == 1 and type(point) != int:
-                        msg = "Bad Request: elements of points should be int type for datasets of rank 1"
+                        msg = "Bad Request: elements of points should be " + \
+                            "int type for datasets of rank 1"
                         self.log.info(msg)
                         raise HTTPError(400, reason=msg)
                     elif rank > 1 and type(point) != list:
-                        msg = "Bad Request: elements of points should be list type for datasets of rank >1"
+                        msg = "Bad Request: elements of points should be " + \
+                            "list type for datasets of rank >1"
                         self.log.info(msg)
                         raise HTTPError(400, reason=msg)
                         if len(point) != rank:
-                            msg = "Bad Request: one or more points have a missing coordinate value"
+                            msg = "Bad Request: one or more points have a " + \
+                                "missing coordinate value"
                             self.log.info(msg)
                             raise HTTPError(400, reason=msg)
 
-                values = db.getDatasetPointSelectionByUuid(self.reqUuid, points)
+                values = db.getDatasetPointSelectionByUuid(self.reqUuid,
+                                                           points)
 
         except IOError as e:
             self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
@@ -1787,7 +1834,7 @@ class ValueHandler(BaseHandler):
             raise HTTPError(status, reason=e.strerror)
 
         # got everything we need, put together the response
-        
+
         response['value'] = values
 
         hrefs.append({
@@ -1805,7 +1852,7 @@ class ValueHandler(BaseHandler):
 
     def put(self):
         self.baseHandler()
-         
+
         points = None
         start = None
         stop = None
@@ -1813,7 +1860,7 @@ class ValueHandler(BaseHandler):
         body = None
         format = "json"
         data = None
-        
+
         try:
             body = json_decode(self.request.body)
         except ValueError as e:
@@ -1832,11 +1879,11 @@ class ValueHandler(BaseHandler):
             base64_data = base64_data.encode("ascii")
             data = base64.b64decode(base64_data)
             format = "binary"
-            
+
         else:
             msg = "Bad Request: Value not specified"
             self.log.info(msg)
-            raise HTTPError(400, reason=msg)  # missing data     
+            raise HTTPError(400, reason=msg)  # missing data
 
         if "points" in body:
             points = body['points']
@@ -1845,7 +1892,8 @@ class ValueHandler(BaseHandler):
                 self.log.info(msg)
                 raise HTTPError(400, reason=msg)
             if 'start' in body or 'stop' in body or 'step' in body:
-                msg = "Bad Request: can use hyperslab selection and points selection in one request"
+                msg = "Bad Request: can use hyperslab selection and " + \
+                    "points selection in one request"
                 self.log.info(msg)
                 raise HTTPError(400, reason=msg)
             if len(points) > len(data):
@@ -1860,16 +1908,17 @@ class ValueHandler(BaseHandler):
                 stop = body['stop']
             if 'step' in body:
                 step = body['step']
-         
 
         try:
             with Hdf5db(self.filePath, app_logger=self.log) as db:
                 rootUUID = db.getUUIDByPath('/')
                 acl = db.getAcl(self.reqUuid, self.userid)
-                self.verifyAcl(acl, 'update')  # throws exception is unauthorized
+
+                # throws exception is unauthorized
+                self.verifyAcl(acl, 'update')
                 item = db.getDatasetItemByUuid(self.reqUuid)
                 item_type = item['type']
-               
+
                 dims = None
                 if 'shape' not in item:
                     msg = "Unexpected error, shape information not found"
@@ -1877,42 +1926,48 @@ class ValueHandler(BaseHandler):
                     raise HTTPError(500, reason=msg)
                 datashape = item['shape']
                 if datashape['class'] == 'H5S_NULL':
-                    msg = "Bad Request: PUT value can't be used with Null Space datasets"
+                    msg = "Bad Request: PUT value can't be used with Null " + \
+                        "Space datasets"
                     self.log.info(msg)
                     raise HTTPError(400, reason=msg)  # missing data
-                    
+
                 if format == "binary":
                     item_size = h5json.getItemSize(item_type)
                     if item_size == "H5T_VARIABLE":
-                        msg = "binary data cannot be used with variable length types"
+                        msg = "binary data cannot be used with variable " + \
+                            "length types"
                         self.log.info(msg)
                         raise HTTPError(400, reason=msg)  # need to use json
-                         
+
                 if datashape['class'] == 'H5S_SIMPLE':
                     dims = datashape['dims']
                 elif datashape['class'] == 'H5S_SCALAR':
-                    if start is not None or stop is not None or step is not None:
-                        msg = "Bad Request: start/stop/step option can't be used with Scalar Space datasets"
-                        self.log.info(msg)
-                        raise HTTPError(400, reason=msg)  # missing data           
-                    elif points:
-                        msg = "Bad Request: Point selection can't be used with scalar datasets"
+                    if start is not None or stop is not None or \
+                            step is not None:
+                        msg = "Bad Request: start/stop/step option can't " + \
+                            "be used with Scalar Space datasets"
                         self.log.info(msg)
                         raise HTTPError(400, reason=msg)  # missing data
-                  
+                    elif points:
+                        msg = "Bad Request: Point selection can't be used " + \
+                            "with scalar datasets"
+                        self.log.info(msg)
+                        raise HTTPError(400, reason=msg)  # missing data
+
                 if points is not None:
                     # write point selection
-                    db.setDatasetValuesByPointSelection(self.reqUuid, data, points, format=format)
-                     
+                    db.setDatasetValuesByPointSelection(
+                        self.reqUuid, data, points, format=format)
+
                 else:
                     slices = None
-                    if dims is not None:          
+                    if dims is not None:
                         slices = self.getHyperslabSelection(
                             dims, start, stop, step)
                     # todo - check that the types are compatible
-                    db.setDatasetValuesByUuid(self.reqUuid, data, slices, format=format)
-                     
-                    
+                    db.setDatasetValuesByUuid(
+                        self.reqUuid, data, slices, format=format)
+
         except IOError as e:
             self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
             status = errNoToHttpStatus(e.errno)
@@ -1934,8 +1989,8 @@ class AttributeHandler(BaseHandler):
             return data
 
     def getRequestName(self):
-        # request is in the form /(datasets|groups|datatypes)/<id>/attributes(/<name>),
-        # return <name>
+        # request is in the form
+        # /(datasets|groups|datatypes)/<id>/attributes(/<name>), return <name>
         # return None if the uri doesn't end with ".../<name>"
         uri = self.request.uri
         name = None
@@ -1958,8 +2013,9 @@ class AttributeHandler(BaseHandler):
         return name
 
     def getRequestCollectionName(self):
-        # request is in the form /(datasets|groups|datatypes)/<id>/attributes(/<name>),
-        # return datasets | groups | datatypes
+        # request is in the form
+        # /(datasets|groups|datatypes)/<id>/attributes(/<name>), return
+        # datasets | groups | datatypes
         uri = self.request.uri
 
         npos = uri.find('/')
@@ -1974,13 +2030,14 @@ class AttributeHandler(BaseHandler):
         if col_name not in ('datasets', 'groups', 'datatypes'):
             msg = "Internal Server Error: collection name unexpected"
             self.log.error(msg)
-            raise HTTPError(500, reason=msg)   # shouldn't get routed here in this case
+            # shouldn't get routed here in this case
+            raise HTTPError(500, reason=msg)
 
         return col_name
 
     def get(self):
         self.baseHandler()
-         
+
         col_name = self.getRequestCollectionName()
         attr_name = self.getRequestName()
 
@@ -2004,11 +2061,13 @@ class AttributeHandler(BaseHandler):
                 acl = db.getAcl(self.reqUuid, self.userid)
                 self.verifyAcl(acl, 'read')  # throws exception is unauthorized
                 if attr_name is not None:
-                    item = db.getAttributeItem(col_name, self.reqUuid, attr_name)
+                    item = db.getAttributeItem(col_name, self.reqUuid,
+                                               attr_name)
                     items.append(item)
                 else:
                     # get all attributes (but without data)
-                    items = db.getAttributeItems(col_name, self.reqUuid, marker, limit)
+                    items = db.getAttributeItems(col_name, self.reqUuid,
+                                                 marker, limit)
 
         except IOError as e:
             self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
@@ -2016,7 +2075,7 @@ class AttributeHandler(BaseHandler):
             raise HTTPError(status, reason=e.strerror)
 
         # got everything we need, put together the response
-        owner_uri = col_name + '/' + self.reqUuid 
+        owner_uri = col_name + '/' + self.reqUuid
         self_uri = owner_uri + '/attributes'
         if attr_name is not None:
             self_uri += '/' + url_escape(attr_name)
@@ -2042,13 +2101,15 @@ class AttributeHandler(BaseHandler):
                 responseItem['value'] = None
             if attr_name is None:
                 # add an href to the attribute
-                responseItem['href'] = self.getHref(self_uri + '/' + url_escape(item['name']))
+                responseItem['href'] = self.getHref(self_uri + '/' +
+                                                    url_escape(item['name']))
 
             responseItems.append(responseItem)
 
         hrefs.append({'rel': 'self', 'href': self.getHref(self_uri)})
         hrefs.append({'rel': 'owner', 'href': self.getHref(owner_uri)})
-        hrefs.append({'rel': 'root', 'href': self.getHref('/groups/' + rootUUID)})
+        hrefs.append({'rel': 'root', 'href': self.getHref('/groups/' +
+                     rootUUID)})
         hrefs.append({'rel': 'home', 'href': self.getHref('')})
 
         if attr_name is None:
@@ -2070,14 +2131,14 @@ class AttributeHandler(BaseHandler):
 
     def put(self):
         self.baseHandler()
-         
+
         col_name = self.getRequestCollectionName()
         attr_name = self.getRequestName()
         if attr_name is None:
             msg = "Bad Request: attribute name not supplied"
             log.info(msg)
             raise HTTPError(400, reason=msg)
-        
+
         body = None
         try:
             body = json_decode(self.request.body)
@@ -2086,8 +2147,9 @@ class AttributeHandler(BaseHandler):
             try:
                 msg += ": " + e.message
             except AttributeError:
-                pass # no message property
-          
+                # no message property
+                pass
+
             self.log.info(msg)
             raise HTTPError(400, reason=msg)
 
@@ -2138,7 +2200,9 @@ class AttributeHandler(BaseHandler):
             with Hdf5db(self.filePath, app_logger=self.log) as db:
                 rootUUID = db.getUUIDByPath('/')
                 acl = db.getAcl(self.reqUuid, self.userid)
-                self.verifyAcl(acl, 'create')  # throws exception is unauthorized
+
+                # throws exception is unauthorized
+                self.verifyAcl(acl, 'create')
                 db.createAttribute(
                     col_name, self.reqUuid, attr_name, dims, datatype, data)
                 rootUUID = db.getUUIDByPath('/')
@@ -2155,10 +2219,11 @@ class AttributeHandler(BaseHandler):
         owner_href = self.getHref(col_name + '/' + self.reqUuid)
         self_href = owner_href + '/attributes'
         if attr_name is not None:
-            self_href = self.getHref(col_name + '/' + self.reqUuid + '/' + attr_name)
+            self_href = self.getHref(col_name + '/' + self.reqUuid + '/' +
+                                     attr_name)
         else:
             self_href = self.getHref(col_name + '/' + self.reqUuid)
-         
+
         hrefs = []
         hrefs.append({'rel': 'self',   'href': self_href})
         hrefs.append({'rel': 'owner',  'href': owner_href})
@@ -2171,7 +2236,7 @@ class AttributeHandler(BaseHandler):
 
     def delete(self):
         self.baseHandler()
-         
+
         col_name = self.getRequestCollectionName()
         attr_name = self.getRequestName()
         if attr_name is None:
@@ -2189,7 +2254,9 @@ class AttributeHandler(BaseHandler):
             with Hdf5db(self.filePath, app_logger=self.log) as db:
                 rootUUID = db.getUUIDByPath('/')
                 acl = db.getAcl(self.reqUuid, self.userid)
-                self.verifyAcl(acl, 'delete')  # throws exception is unauthorized
+
+                # throws exception is unauthorized
+                self.verifyAcl(acl, 'delete')
                 db.deleteAttribute(col_name, self.reqUuid, attr_name)
 
         except IOError as e:
@@ -2198,7 +2265,7 @@ class AttributeHandler(BaseHandler):
             raise HTTPError(status, reason=e.strerror)
 
         # got everything we need, put together the response
-        
+
         root_href = self.getHref('groups/' + rootUUID)
         owner_href = self.getHref(col_name + '/' + self.reqUuid)
         self_href = self.getHref(col_name + '/' + self.reqUuid + '/attributes')
@@ -2220,7 +2287,7 @@ class GroupHandler(BaseHandler):
 
     def get(self):
         self.baseHandler()
-        
+
         response = {}
 
         hrefs = []
@@ -2240,7 +2307,7 @@ class GroupHandler(BaseHandler):
             raise HTTPError(status, reason=e.strerror)
 
         # got everything we need, put together the response
-         
+
         hrefs.append({
             'rel': 'self',
             'href': self.getHref('groups/' + self.reqUuid)
@@ -2250,7 +2317,7 @@ class GroupHandler(BaseHandler):
             'href': self.getHref('groups/' + self.reqUuid + '/links')
         })
         hrefs.append({
-            'rel': 'root', 
+            'rel': 'root',
             'href': self.getHref('groups/' + rootUUID)
         })
         hrefs.append({
@@ -2273,13 +2340,15 @@ class GroupHandler(BaseHandler):
 
     def delete(self):
         self.baseHandler()
-         
+
         self.isWritable(self.filePath)
         try:
             with Hdf5db(self.filePath, app_logger=self.log) as db:
                 rootUUID = db.getUUIDByPath('/')
                 acl = db.getAcl(self.reqUuid, self.userid)
-                self.verifyAcl(acl, 'delete')  # throws exception is unauthorized
+
+                # throws exception is unauthorized
+                self.verifyAcl(acl, 'delete')
                 db.deleteObjectByUuid('group', self.reqUuid)
         except IOError as e:
             self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
@@ -2290,7 +2359,7 @@ class GroupHandler(BaseHandler):
         hrefs = []
 
         # write the response
-         
+
         hrefs.append({'rel': 'self', 'href': self.getHref('groups')})
         hrefs.append({
             'rel': 'root', 'href': self.getHref('groups/' + rootUUID)})
@@ -2305,7 +2374,7 @@ class GroupCollectionHandler(BaseHandler):
 
     def get(self):
         self.baseHandler()
-         
+
         rootUUID = None
 
         # Get optional query parameters
@@ -2336,7 +2405,7 @@ class GroupCollectionHandler(BaseHandler):
 
         # write the response
         response['groups'] = items
-         
+
         hrefs.append({
             'rel': 'self', 'href': self.getHref('groups')})
         hrefs.append({
@@ -2350,9 +2419,10 @@ class GroupCollectionHandler(BaseHandler):
 
     def post(self):
         self.baseHandler()
-         
+
         if self.request.uri != '/groups':
-            msg = "Method Not Allowed: bad group post request: " + self.request.uri
+            msg = "Method Not Allowed: bad group post request: " + \
+                self.request.uri
             self.log.info(msg)
             raise HTTPError(405, reason=msg)  # Method not allowed
 
@@ -2376,10 +2446,9 @@ class GroupCollectionHandler(BaseHandler):
                 raise HTTPError(400, reason=msg)
             parent_group_uuid = link_options["id"]
             link_name = link_options["name"]
-            self.log.info(
-                "add link to: " + parent_group_uuid + " with name: " + link_name)
+            self.log.info("add link to: " + parent_group_uuid + " with name: "
+                          + link_name)
 
-         
         self.isWritable(self.filePath)
 
         try:
@@ -2387,9 +2456,11 @@ class GroupCollectionHandler(BaseHandler):
                 rootUUID = db.getUUIDByPath('/')
                 current_user_acl = db.getAcl(rootUUID, self.userid)
 
-                self.verifyAcl(current_user_acl, 'create')  # throws exception is unauthorized
+                # throws exception is unauthorized
+                self.verifyAcl(current_user_acl, 'create')
                 grpUUID = db.createGroup()
                 item = db.getGroupItemByUuid(grpUUID)
+
                 # if link info is provided, link the new group
                 if parent_group_uuid:
                     # link the new dataset
@@ -2406,7 +2477,7 @@ class GroupCollectionHandler(BaseHandler):
         # got everything we need, put together the response
         response = {}
         hrefs = []
-         
+
         hrefs.append({
             'rel': 'self', 'href': self.getHref('groups/' + grpUUID)})
         hrefs.append({
@@ -2468,7 +2539,7 @@ class DatasetCollectionHandler(BaseHandler):
 
         # write the response
         response['datasets'] = items
-         
+
         hrefs.append({'rel': 'self', 'href': self.getHref('datasets')})
         hrefs.append({
             'rel': 'root', 'href': self.getHref('groups/' + rootUUID)})
@@ -2499,7 +2570,6 @@ class DatasetCollectionHandler(BaseHandler):
                 msg = "JSON Parser Error: " + e.message
                 self.log.info(msg)
                 raise HTTPError(400, reason=msg)
-                
 
         if "type" not in body:
             msg = "Bad Request: Type not specified"
@@ -2530,7 +2600,8 @@ class DatasetCollectionHandler(BaseHandler):
 
             group_uuid = link_options["id"]
             link_name = link_options["name"]
-            self.log.info("add link to: " + group_uuid + " with name: " + link_name)
+            self.log.info("add link to: " + group_uuid + " with name: " +
+                          link_name)
 
         datatype = body["type"]
 
@@ -2567,13 +2638,15 @@ class DatasetCollectionHandler(BaseHandler):
                 raise HTTPError(400, reason=msg)
 
             if len(maxdims) != len(dims):
-                msg = "Bad Request: maxdims array length must equal shape array length"
+                msg = "Bad Request: maxdims array length must equal shape " + \
+                    "array length"
                 self.log.info(msg)
                 raise HTTPError(400, reason=msg)
             for i in range(len(dims)):
                 maxextent = maxdims[i]
                 if maxextent != 0 and maxextent < dims[i]:
-                    msg = "Bad Request: maxdims extent can't be smaller than shape extent"
+                    msg = "Bad Request: maxdims extent can't be smaller " + \
+                        "than shape extent"
                     self.log.info(msg)
                     raise HTTPError(400, reason=msg)
                 if maxextent == 0:
@@ -2587,13 +2660,18 @@ class DatasetCollectionHandler(BaseHandler):
             with Hdf5db(self.filePath, app_logger=self.log) as db:
                 rootUUID = db.getUUIDByPath('/')
                 acl = db.getAcl(rootUUID, self.userid)
-                self.verifyAcl(acl, 'create')  # throws exception is unauthorized
+
+                # throws exception is unauthorized
+                self.verifyAcl(acl, 'create')
                 # verify the link perm as well
                 if group_uuid and group_uuid != rootUUID:
                     acl = db.getAcl(group_uuid, self.userid)
-                    self.verifyAcl(acl, 'create')  # throws exception is unauthorized
 
-                item = db.createDataset(datatype, dims, maxdims, creation_props=creationProps)
+                    # throws exception is unauthorized
+                    self.verifyAcl(acl, 'create')
+
+                item = db.createDataset(datatype, dims, maxdims,
+                                        creation_props=creationProps)
                 if group_uuid:
                     # link the new dataset
                     db.linkObject(group_uuid, item['id'], link_name)
@@ -2606,7 +2684,7 @@ class DatasetCollectionHandler(BaseHandler):
 
         # got everything we need, put together the response
         hrefs = []
-         
+
         hrefs.append({
             'rel': 'self',
             'href': self.getHref('datasets/' + item['id'])
@@ -2636,7 +2714,7 @@ class DatasetCollectionHandler(BaseHandler):
 class TypeCollectionHandler(BaseHandler):
     def get(self):
         self.baseHandler()
-         
+
         # Get optional query parameters
         limit = self.get_query_argument("Limit", 0)
         if type(limit) is not int:
@@ -2687,7 +2765,6 @@ class TypeCollectionHandler(BaseHandler):
             log.info(msg)
             raise HTTPError(405, reason=msg)  # Method not allowed
 
-        
         self.isWritable(self.filePath)
 
         body = None
@@ -2715,7 +2792,8 @@ class TypeCollectionHandler(BaseHandler):
             parent_group_uuid = link_options["id"]
             link_name = link_options["name"]
             self.log.info(
-                "add link to: " + parent_group_uuid + " with name: " + link_name)
+                "add link to: " + parent_group_uuid + " with name: " +
+                link_name)
 
         datatype = body["type"]
 
@@ -2726,7 +2804,9 @@ class TypeCollectionHandler(BaseHandler):
             with Hdf5db(self.filePath, app_logger=self.log) as db:
                 rootUUID = db.getUUIDByPath('/')
                 acl = db.getAcl(rootUUID, self.userid)
-                self.verifyAcl(acl, 'create')  # throws exception is unauthorized
+
+                # throws exception is unauthorized
+                self.verifyAcl(acl, 'create')
                 item = db.createCommittedType(datatype)
                 # if link info is provided, link the new group
                 if parent_group_uuid:
@@ -2742,7 +2822,7 @@ class TypeCollectionHandler(BaseHandler):
 
         # got everything we need, put together the response
         hrefs = []
-         
+
         hrefs.append({
             'rel': 'self',
             'href': self.getHref('datatypes/' + item['id'])
@@ -2765,7 +2845,7 @@ class TypeCollectionHandler(BaseHandler):
 
 
 class RootHandler(BaseHandler):
-     
+
     def getRootResponse(self, filePath):
         acl = None
         # used by GET / and PUT /
@@ -2784,7 +2864,7 @@ class RootHandler(BaseHandler):
 
         # generate response
         hrefs = []
-         
+
         hrefs.append({
             'rel': 'self', 'href': self.getHref('')})
         hrefs.append({
@@ -2804,8 +2884,8 @@ class RootHandler(BaseHandler):
         return response
 
     def get(self):
-         
-        self.baseHandler()  
+
+        self.baseHandler()
         """
         self.log.info("header keys...")
         for k in self.request.headers.keys():
@@ -2821,32 +2901,33 @@ class RootHandler(BaseHandler):
             raise e  # re-throw the exception
 
         root_uuid = response['root']
- 
+
         self.set_header('Content-Type', 'application/json')
         self.write(json_encode(response))
 
     def put(self):
-        self.baseHandler(checkExists=False)     
+        self.baseHandler(checkExists=False)
 
         self.log.info("filePath: " + self.filePath)
-        
+
         if self.filePath is not None and fileUtil.isFile(self.filePath):
             # the file already exists
             msg = "Conflict: resource exists: " + self.filePath
             self.log.info(msg)
-            raise HTTPError(409, reason=msg)  # Conflict - is this the correct code?
-             
+            # Conflict - is this the correct code?
+            raise HTTPError(409, reason=msg)
+
         if self.filePath is not None and self.isTocFilePath(self.filePath):
             msg = "Forbidden: invalid resource"
             self.log.info(msg)
             raise HTTPError(403, reason=msg)  # Forbidden - TOC file
-        
+
         if self.filePath is None:
             msg = "domain not valid"
             self.log.info(msg)
             raise HTTPError(400, reason=msg)
-        
-        self.log.info("FilePath: " + self.filePath)     
+
+        self.log.info("FilePath: " + self.filePath)
         # create directories as needed
         fileUtil.makeDirs(op.dirname(self.filePath))
         self.log.info("creating file: [" + self.filePath + "]")
@@ -2855,14 +2936,15 @@ class RootHandler(BaseHandler):
             Hdf5db.createHDF5File(self.filePath)
         except IOError as e:
             self.log.info(
-                "IOError creating new HDF5 file: " + str(e.errno) + " " + e.strerror)
+                "IOError creating new HDF5 file: " + str(e.errno) + " " +
+                e.strerror)
             raise HTTPError(
                 500, "Unexpected error: unable to create collection")
 
         response = self.getRootResponse(self.filePath)
-        
+
         try:
-            tocUtil.addTocEntry(self.domain, self.filePath, userid=self.userid)        
+            tocUtil.addTocEntry(self.domain, self.filePath, userid=self.userid)
         except IOError as e:
             self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
             status = errNoToHttpStatus(e.errno)
@@ -2874,7 +2956,7 @@ class RootHandler(BaseHandler):
 
     def delete(self):
         self.baseHandler()
-         
+
         self.isWritable(self.filePath)
 
         if not op.isfile(self.filePath):
@@ -2900,14 +2982,17 @@ class RootHandler(BaseHandler):
                 rootUUID = db.getUUIDByPath('/')
                 acl = db.getAcl(rootUUID, self.userid)
                 print("verify delete, ", acl, self.userid)
-                self.verifyAcl(acl, 'delete')  # throws exception is unauthorized
+
+                # throws exception is unauthorized
+                self.verifyAcl(acl, 'delete')
         except IOError as e:
             self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
             status = errNoToHttpStatus(e.errno)
             raise HTTPError(status, reason=e.strerror)
 
         try:
-            tocUtil.removeTocEntry(self.domain, self.filePath, userid=self.userid)
+            tocUtil.removeTocEntry(self.domain, self.filePath,
+                                   userid=self.userid)
         except IOError as ioe:
             # This exception may happen if the file has been imported directly
             # after toc creation
@@ -2917,7 +3002,8 @@ class RootHandler(BaseHandler):
             os.remove(self.filePath)
         except IOError as ioe:
             self.log.info(
-                "IOError deleting HDF5 file: " + str(ioe.errno) + " " + ioe.strerror)
+                "IOError deleting HDF5 file: " + str(ioe.errno) + " " +
+                ioe.strerror)
             raise HTTPError(
                 500, "Unexpected error: unable to delete collection")
 
@@ -2943,7 +3029,8 @@ class InfoHandler(RequestHandler):
         accept_type = ''
         if 'accept' in self.request.headers:
             accept = self.request.headers['accept']
-            # just extract the first type and not worry about q values for now...
+            # just extract the first type and not worry about q values for
+            # now...
             accept_values = accept.split(',')
             accept_types = accept_values[0].split(';')
             accept_type = accept_types[0]
@@ -2952,10 +3039,15 @@ class InfoHandler(RequestHandler):
             self.set_header('Content-Type', 'text/html')
             htmlText = "<html><body><h1>" + response['greeting'] + "</h1>"
             htmlText += "<h2>" + response['about'] + "</h2>"
-            htmlText += "<h2>Documentation: <a href=" + response['documentation'] + "> h5serv documentation </a></h2>"
-            htmlText += "<h2>server version: " + response['h5serv_version'] + "</h2>"
-            htmlText += "<h2>h5py version: " + response['h5py_version'] + "</h2>"
-            htmlText += "<h2>hdf5 version: " + response['hdf5_version'] + "</h2>"
+            htmlText += "<h2>Documentation: <a href=" + \
+                response['documentation'] + \
+                "> h5serv documentation </a></h2>"
+            htmlText += "<h2>server version: " + \
+                response['h5serv_version'] + "</h2>"
+            htmlText += "<h2>h5py version: " + \
+                response['h5py_version'] + "</h2>"
+            htmlText += "<h2>hdf5 version: " + \
+                response['hdf5_version'] + "</h2>"
             htmlText += "</body></html>"
             self.write(htmlText)
         else:
@@ -2995,7 +3087,7 @@ def shutdown():
 def make_app():
     static_url = config.get('static_url')
     static_path = config.get('static_path')
-    settings = {} 
+    settings = {}
     config_debug = config.get('debug')
     if type(config_debug) is str:
         if config_debug[0] in ('T', 't'):
@@ -3004,7 +3096,7 @@ def make_app():
             settings["debug"] = False
     else:
         settings["debug"] = config_debug
-     
+
     favicon_path = "favicon.ico"
     print("dirname path:", os.path.dirname(__file__))
     print("favicon_path:", favicon_path)
@@ -3045,8 +3137,10 @@ def make_app():
         url(r"/groups\?.*", GroupCollectionHandler),
         url(r"/groups", GroupCollectionHandler),
         url(r"/info", InfoHandler),
-        url(static_url, tornado.web.StaticFileHandler, {'path': static_path}),
-        url(r"/(favicon\.ico)", tornado.web.StaticFileHandler, {'path': favicon_path}),
+        url(static_url, tornado.web.StaticFileHandler,
+            {'path': static_path}),
+        url(r"/(favicon\.ico)",
+            tornado.web.StaticFileHandler, {'path': favicon_path}),
         url(r"/acls/.*", AclHandler),
         url(r"/acls", AclHandler),
         url(r"/", RootHandler),
@@ -3054,8 +3148,9 @@ def make_app():
     ],  **settings)
     return app
 
-# 
-# update TOC when files are added via some out of process method 
+
+#
+# update TOC when files are added via some out of process method
 # (e.g. scp to the server)
 #
 def updateToc(filepath):
@@ -3063,45 +3158,45 @@ def updateToc(filepath):
     log.info("updateToc(%s)", filepath)
     if os.name == 'nt':
         filepath = filepath.replace('\\', '/')  # match HDF5 convention
-    hdf5_ext = config.get('hdf5_ext')  
+    hdf5_ext = config.get('hdf5_ext')
     if not filepath.endswith(hdf5_ext):
         log.info("ignoring non-HDF5 file added to data directory")
         return
-    
+
     if filepath.endswith(config.get('toc_name')):
         log.info("ignore toc file creation")
-        return 
-     
+        return
+
     base_domain = fileUtil.getDomain(filepath)
     log.info("base domain: " + base_domain)
-    
+
     try:
-        if fileUtil.isFile(filepath): 
-            tocUtil.addTocEntry(base_domain, filepath) 
+        if fileUtil.isFile(filepath):
+            tocUtil.addTocEntry(base_domain, filepath)
         else:
             tocUtil.removeTocEntry(base_domain, filepath)
     except IOError as e:
         log.info("periodic callback: unable to update toc")
-        
-    
-        
+
+
 #
 # Background processing callback
 #
 def periodicCallback():
     # callback for background processing
     log = logging.getLogger("h5serv")
-    #log.info("periodicCallback")
+    # log.info("periodicCallback")
     # check event queue
     while not event_queue.empty():
         item = event_queue.get()
         log.info("process_queue, got: %s", item)
         # just add file events for now
         updateToc(item)
-    
+
+
 def main():
     # os.chdir(config.get('datapath'))
-    
+
     app_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
     os.chdir(app_dir)
 
@@ -3109,20 +3204,19 @@ def main():
     log = logging.getLogger("h5serv")
     log_file = config.get("log_file")
     log_level = config.get("log_level")
-       
-     
+
     # add file handler if given in config
     if log_file:
         print("Using logfile: ", log_file)
         # set daily rotating log
-        
+
         handler = logging.handlers.TimedRotatingFileHandler(
             log_file,
             when="midnight",
             interval=1,
             backupCount=0,
             utc=True)
-  
+
         # add formatter to handler
         # create formatter
         formatter = logging.Formatter(
@@ -3132,7 +3226,7 @@ def main():
         log.addHandler(handler)
     else:
         print("No logfile")
-        
+
     # add default logger (to stdout)
     handler = logging.StreamHandler(sys.stdout)
     # create formatter
@@ -3141,14 +3235,14 @@ def main():
     handler.setFormatter(formatter)
     log.addHandler(handler)
     log.propagate = False  # otherwise, we'll get repeated lines
-    
+
     password_uri = "none"
     x = "password_uri"
     if x.upper() in os.environ:
         password_uri = os.environ[x.upper()]
     password_uri = config.get("password_uri")
-    print("password_uri config:", password_uri)   
-    
+    print("password_uri config:", password_uri)
+
     # log levels: ERROR, WARNING, INFO, DEBUG, or NOTSET
     if not log_level or log_level == "NOTSET":
         log.setLevel(logging.NOTSET)
@@ -3166,15 +3260,14 @@ def main():
         log.setLevel(logging.DEBUG)
     else:
         print("No logging!")
-        log.setLevel(logging.NOTSET)  
-    
+        log.setLevel(logging.NOTSET)
+
     log.info("log test")
-    
+
     app = make_app()
     domain = config.get("domain")
     print("domain:", domain)
-    
-    
+
     ssl_cert = config.get('ssl_cert')
     if ssl_cert:
         print("ssl_cert:", ssl_cert)
@@ -3184,7 +3277,7 @@ def main():
     ssl_port = config.get('ssl_port')
     if ssl_port:
         print("ssl_port:", ssl_port)
-    
+
     #
     # Setup listener for changes in the file system
     #
@@ -3197,17 +3290,19 @@ def main():
         print("Setting watchdog on: ", data_path)
         h5observe(data_path, event_queue)
         tornado.ioloop.PeriodicCallback(periodicCallback, 1000).start()
-        
-    # 
+
+    #
     # Insantiate auth class
     #
     global auth
     auth = getAuthClient()
-     
-    if ssl_cert and op.isfile(ssl_cert) and ssl_key and op.isfile(ssl_key) and ssl_port:
+
+    if ssl_cert and op.isfile(ssl_cert) and ssl_key and op.isfile(ssl_key) \
+            and ssl_port:
         ssl_cert_pwd = config.get('ssl_cert_pwd')
         ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        ssl_ctx.load_cert_chain(ssl_cert, keyfile=ssl_key, password=ssl_cert_pwd)
+        ssl_ctx.load_cert_chain(ssl_cert, keyfile=ssl_key,
+                                password=ssl_cert_pwd)
         ssl_server = tornado.httpserver.HTTPServer(app, ssl_options=ssl_ctx)
         ssl_server.listen(ssl_port)
         msg = "Running SSL on port: " + str(ssl_port) + " (SSL)"
@@ -3216,7 +3311,6 @@ def main():
         port = int(config.get('port'))
         server.listen(port)
         msg = "Starting event loop on port: " + str(port)
-        
 
     signal.signal(signal.SIGTERM, sig_handler)
     signal.signal(signal.SIGINT, sig_handler)
@@ -3225,6 +3319,7 @@ def main():
     print(msg)
 
     IOLoop.current().start()
+
 
 if __name__ == "__main__":
     main()
