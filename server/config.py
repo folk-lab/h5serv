@@ -17,7 +17,8 @@ cfg = {
     'debug':  True,
     'datapath': '../data/',
     'public_dir': ['public', 'test'],
-    'domain':  'hdfgroup.org',
+    # 'domain':  'hdfgroup.org',
+    'domain':  'maxiv.lu.se',
     'hdf5_ext': '.h5',
     'toc_name': '.toc.h5',
     'home_dir': 'home',
@@ -25,14 +26,15 @@ cfg = {
     'ssl_cert': '',  # certs/data.hdfgroup.org.crt',  # add relative path to cert for SSL
     'ssl_key':  '',  # certs/data.hdfgroup.org.key',  # add relative path to cert key for SSL
     'ssl_cert_pwd': '',
-    'password_uri': '../util/admin/passwd.h5',     
+    'password_uri': '../util/admin/passwd.h5',
     #'password_uri': 'mongodb://mongo:27017',
     'mongo_dbname': 'hdfdevtest',
     'static_url': r'/views/(.*)',
     'static_path': r'../static',
     'cors_domain': '*',  # set to None to disallow CORS (cross-origin resource sharing)
     'log_file': r'../log/h5serv.log',
-    'log_level': 'INFO', # ERROR, WARNING, INFO, DEBUG, or NOTSET,
+    # 'log_level': 'INFO', # ERROR, WARNING, INFO, DEBUG, or NOTSET,
+    'log_level': 'DEBUG', # ERROR, WARNING, INFO, DEBUG, or NOTSET,
     'background_timeout': 1000  # (ms) set to 0 to disable background processing
 }
 
