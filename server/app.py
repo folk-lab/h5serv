@@ -291,14 +291,14 @@ class BaseHandler(tornado.web.RequestHandler):
 
         # convert any "%2E" substrings with "." (since dot isn't allowed for
         # domain name)
-        # filePath = self.nameDecode(filePath)
+        filePath = self.nameDecode(filePath)
 
         # The above seems not to work when using addresses such as:
         #   http://w-jasbru-pc-0.maxiv.lu.se:5000/
         # even though it works fine with:
         #   http://w-jasbru-pc-0:5000/
         # I suppose what follows is not a proper fix...
-        filePath = tocFilePath
+        # filePath = tocFilePath
 
         if checkExists:
             while True:
