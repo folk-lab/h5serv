@@ -1714,9 +1714,18 @@ class ValueHandler(BaseHandler):
 
                         self.log.info("response_content_type: " +
                                       response_content_type)
+                        ##################################
+                        # Jason - for some reason, on one particualr server,
+                        # I got an error:
+                        #   TypeError: getDatasetValuesByUuid() got an
+                        #       unexpected keyword argument 'format'
+                        # So, have commented this out, might be bad to do?
+                        ##################################
+                        # values = db.getDatasetValuesByUuid(
+                        #     self.reqUuid, tuple(slices),
+                        #     format=response_content_type)
                         values = db.getDatasetValuesByUuid(
-                            self.reqUuid, tuple(slices),
-                            format=response_content_type)
+                            self.reqUuid, tuple(slices), response_content_type)
 
                         # ### Jason mucking about... ### #
                         item_alias = item['alias']
