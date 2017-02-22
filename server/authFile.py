@@ -14,7 +14,7 @@ import six
 
 if six.PY3:
     unicode = str
-    
+
 import os.path as op
 import time
 import hashlib
@@ -37,7 +37,7 @@ class AuthClient(object):
         self.filepath = filepath
         self.username_cache = {}
         self.userid_cache = {}
-         
+
 
     """
     Password util helper functions
@@ -48,14 +48,14 @@ class AuthClient(object):
         """
         getUserInfo: return user data
         """
-         
+
         userid = None
 
         if not user_name:
             return None
-            
+
         self.log.info("Auth.getUserInfo: [" + to_string(user_name) + "]")
-        
+
         if user_name in self.username_cache:
             item = self.username_cache[user_name]
             if item['timestamp'] - time.time() > cache_expire_time:
@@ -66,8 +66,8 @@ class AuthClient(object):
                 self.log.info("Auth-got cache value")
                 data = item['data']
                 return data
-                    
-       
+
+
         # verify file exists and is writable
         if not op.isfile(self.filepath):
             self.log.error("password file is missing")
@@ -81,8 +81,8 @@ class AuthClient(object):
             if user_name not in f.attrs:
                 return None
             data = f.attrs[user_name]
-            
-        # add to cache 
+
+        # add to cache
         self.log.info("Auth - added to cache")
         item = {}
         timestamp = time.time()
@@ -94,7 +94,7 @@ class AuthClient(object):
         item['username'] = user_name
         userid = data['userid']
         self.userid_cache[userid] = item
-        
+
         return data
 
 
@@ -117,7 +117,7 @@ class AuthClient(object):
         """
 
         self.log.info("Auth.getUserName: [" + str(userid) + "]")
-        
+
         if userid in self.userid_cache:
             item = self.userid_cache[userid]
             if item['timestamp'] - time.time() > cache_expire_time:
@@ -128,7 +128,7 @@ class AuthClient(object):
                 self.log.info("Auth-got cache value")
                 username = item['username']
                 return to_string(username)
-         
+
         # verify file exists and is writable
         if not op.isfile(self.filepath):
             self.log.error("password file is missing")
@@ -144,13 +144,13 @@ class AuthClient(object):
                 attr = f.attrs[attr_name]
                 if attr['userid'] == userid:
                     user_name = to_string(attr_name)
-        
+
         self.log.info("Auth-add to cachecache")
         item = {}
         item['timestamp'] = time.time()
         item['username'] = user_name
         self.userid_cache[userid] = item
-        
+
         return user_name
 
 

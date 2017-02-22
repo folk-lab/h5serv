@@ -4,3 +4,11 @@ data/*.h5
 data/*.db
 test/unit/*.h5
 test/unit/*.db
+log/*.log
+log/*.log.*
+data/example-subfolder/
+data/from-vincent-m/
+data/from-zdenek/
+data/jie/
+data/nanomax-read-only/
+data/public/

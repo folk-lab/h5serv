@@ -10,6 +10,9 @@
 # request a copy from help@hdfgroup.org.                                     #
 ##############################################################################
 
+import hdf5plugin
+import largeImages
+import numpy
 import time
 import signal
 import logging
@@ -39,6 +42,9 @@ if six.PY3:
     from queue import Queue
 else:
     from Queue import Queue
+
+
+assert hdf5plugin  # silence pyflakes
 
 
 def to_bytes(a_string):
@@ -1676,6 +1682,8 @@ class ValueHandler(BaseHandler):
                         self.log.info(msg)
                         raise HTTPError(400, reason=msg)
                     values = db.getDatasetValuesByUuid(self.reqUuid, Ellipsis)
+                    if isinstance(values, numpy.ndarray):
+                        values = values.tolist()
                 elif item_shape['class'] == 'H5S_SIMPLE':
                     dims = item_shape['dims']
                     rank = len(dims)
@@ -1709,6 +1717,15 @@ class ValueHandler(BaseHandler):
                         values = db.getDatasetValuesByUuid(
                             self.reqUuid, tuple(slices),
                             format=response_content_type)
+
+                        # ### Jason mucking about... ### #
+                        item_alias = item['alias']
+                        self.log.info('item_alias: ' + str(item_alias))
+                        self.log.info('item: ' + str(item))
+                        self.log.info('filePath: ' + self.filePath)
+                        values = largeImages.decimate_if_necessary(
+                            values, self.filePath, True, True)
+                        ##################################
 
                 else:
                     msg = "Internal Server Error: unexpected shape class: " + \

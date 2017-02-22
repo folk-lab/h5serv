@@ -35,7 +35,7 @@ def getTocFilePath(user=None):
         #print("get user toc")
         toc_file_path = fileUtil.join(datapath, config.get('home_dir'))
         toc_file_path = fileUtil.join(toc_file_path, config.get('toc_name'))
- 
+
     return toc_file_path
 
 
@@ -47,14 +47,14 @@ def isTocFilePath(filePath):
     else:
         isTocFilePath = False
     return isTocFilePath
-    
-    
+
+
 
 """
 helper - get group uuid of hardlink, or None if no link
 """
 def getSubgroupId(db, group_uuid, link_name):
-    #print("link_name:", link_name)    
+    #print("link_name:", link_name)
     subgroup_uuid = None
     try:
         item = db.getLinkItemByUuid(group_uuid, link_name)
@@ -68,7 +68,7 @@ def getSubgroupId(db, group_uuid, link_name):
         pass
 
     return subgroup_uuid
-        
+
 """
 Update toc with new filename
 """
@@ -85,12 +85,12 @@ def addTocEntry(domain, filePath,  userid=None):
     if not filePath.startswith(dataPath):
         log.error("unexpected filepath: " + filePath)
         raise HTTPError(500)
-    filePath = fileUtil.getUserFilePath(filePath)   
+    filePath = fileUtil.getUserFilePath(filePath)
     tocFile = fileUtil.getTocFilePathForDomain(domain)
     log.info("tocFile: " + tocFile)
     acl = None
 
-    try:         
+    try:
         with Hdf5db(tocFile, app_logger=log) as db:
             group_uuid = db.getUUIDByPath('/')
             pathNames = filePath.split('/')
@@ -120,7 +120,7 @@ def addTocEntry(domain, filePath,  userid=None):
                         # link the new group
                         log.info("linkObject -- uuid: %s, subgroup_uuid: %s, linkName: %s", group_uuid, subgroup_uuid, linkName)
                         db.linkObject(group_uuid, subgroup_uuid, linkName)
-                    group_uuid = subgroup_uuid 
+                    group_uuid = subgroup_uuid
 
     except IOError as e:
         log.info("IOError: " + str(e.errno) + " " + e.strerror)
@@ -137,7 +137,7 @@ def removeTocEntry(domain, filePath, userid=None):
     if not filePath.startswith(dataPath):
         log.error("unexpected filepath: " + filePath)
         raise HTTPError(500)
-    filePath = fileUtil.getUserFilePath(filePath)   
+    filePath = fileUtil.getUserFilePath(filePath)
     tocFile = fileUtil.getTocFilePathForDomain(domain)
     log.info("removeTocEntry - domain: " + domain + " filePath: " + filePath + " tocfile: " + tocFile)
     pathNames = filePath.split('/')
@@ -147,7 +147,7 @@ def removeTocEntry(domain, filePath, userid=None):
         with Hdf5db(tocFile, app_logger=log) as db:
             group_uuid = db.getUUIDByPath('/')
             log.info("group_uuid:" + group_uuid)
-                           
+
             for linkName in pathNames:
                 if not linkName:
                     continue
@@ -170,7 +170,7 @@ def removeTocEntry(domain, filePath, userid=None):
 
 """
 Create a populate TOC file if not present
-"""            
+"""
 def createTocFile(datapath):
     log = logging.getLogger("h5serv")
     log.info("createTocFile(" + datapath + ")")
@@ -183,57 +183,57 @@ def createTocFile(datapath):
     else:
         log.info("system toc")
         user_toc = False
-    
+
     if datapath.endswith(config.get('toc_name')):
         toc_dir = fileUtil.posixpath(op.normpath(op.dirname(datapath)))
         toc_file = datapath
     else:
         toc_dir = fileUtil.posixpath(op.normpath(datapath))
         toc_file = fileUtil.join(toc_dir, config.get("toc_name"))
-   
-           
+
+
     log.info("toc_dir:[" + toc_dir + "]")
-    log.info("data_dir:[" + data_dir + "]") 
+    log.info("data_dir:[" + data_dir + "]")
     log.info("home_dir:[" + home_dir + "]")
-    log.info("check toc with path: " + toc_file)    
+    log.info("check toc with path: " + toc_file)
     if op.exists(toc_file):
         msg = "toc file already exists"
         log.warn(msg)
         raise IOError(msg)
-        
+
     base_domain = fileUtil.getDomain(toc_dir)
     log.info("base domain: " + base_domain)
-    
+
     #if os.name == 'nt':
     #    toc_dir = toc_dir.replace('\\', '/')  # use unix style to map to HDF5 convention
-    
-    hdf5_ext = config.get('hdf5_ext')  
-    
+
+    hdf5_ext = config.get('hdf5_ext')
+
     f = h5py.File(toc_file, 'w')
-     
+
     for root, subdirs, files in os.walk(toc_dir):
         root = fileUtil.posixpath(root)
         log.info( "toc walk: " + root)
-        
+
         if toc_dir == data_dir:
             log.info(fileUtil.join(toc_dir, home_dir))
             if root.startswith(home_dir):
                 log.info("skipping home dir")
                 continue
-         
+
         grppath = root[len(toc_dir):]
         if not grppath:
             grppath = '/'
         if grppath[-1] == '.':
             grppath = grppath[:-1]
         log.info("grppath: " + grppath)
-         
+
         if os.name == 'nt':
             grppath = grppath.replace('\\', '/')  # match HDF5 convention
         grp = None
         if grppath == '/':
             grp = f['/']  # use root group
-         
+
         domainpath = fileUtil.getDomain(grppath, base_domain=base_domain)
         log.info("grppath: " + grppath)
         log.info("base_domain: " + base_domain)
@@ -243,11 +243,11 @@ def createTocFile(datapath):
             if filename[0] == '.':
                 log.info("skip hidden")
                 continue  # skip 'hidden' files
-            
+
             filepath = fileUtil.join(root, filename)
             log.info("walk, filepath: " + filepath)
             link_target = '/'
-            
+
             if op.islink(filepath):
                 log.info("symlink: " + filepath)
                 # todo - quick hack for now to set a symlink with to sub-folder of data dir
@@ -266,16 +266,16 @@ def createTocFile(datapath):
                 # replace any dots with '%2E' to disambiguate from domain seperators
                 filename_encoded = filename.replace('.', '%2E')
                 log.info("filename (noext): " + filename)
-                if domainpath[0] == '.':        
+                if domainpath[0] == '.':
                     filedomain = filename_encoded + domainpath
                 else:
                     filedomain = filename_encoded + '.' + domainpath
-                    
+
             # create the grp at grppath if it doesn't exist
             if not grp:
                 log.info("tocfile - create_group: " + grppath)
-                grp = f.create_group(grppath)           
-                
+                grp = f.create_group(grppath)
+
             # verify that we can convert the domain back to a file path
             log.info("filedomain: " + filedomain)
             try:
