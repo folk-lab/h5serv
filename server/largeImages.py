@@ -29,7 +29,7 @@ assert hdf5plugin  # silence pyflakes
 # HELPERS #
 ###########
 
-def get_image(fileName, dataset_name, debug):
+def get_image(fileName, dataset_name, slices, debug):
     '''
     Send the data off to the data server, which will then make it available
 
@@ -37,7 +37,24 @@ def get_image(fileName, dataset_name, debug):
 
     # Get a nice single image from an existing file
     f1 = h5py.File(fileName, 'r')
-    image = f1[dataset_name][:, :]
+
+    if (slices):
+
+        index_offset = 0
+        if len(slices) == 3:
+            index_offset = 1
+
+        xStart = slices[index_offset].start
+        xStop = slices[index_offset].stop
+        xStep = slices[index_offset].step
+        yStart = slices[index_offset + 1].start
+        yStop = slices[index_offset + 1].stop
+        yStep = slices[index_offset + 1].step
+
+        image = f1[dataset_name][xStart:xStop:xStep, yStart:yStop:yStep]
+    else:
+        image = f1[dataset_name][:, :]
+
     f1.close()
 
     if debug:
@@ -46,15 +63,27 @@ def get_image(fileName, dataset_name, debug):
     return image
 
 
-def get_series_image(fileName, dataset_name, image_index, debug):
+def get_series_image(fileName, dataset_name, image_index, slices, debug):
     '''
-    Send the data off to the data server, which will then make it available
-
     '''
 
     # Get a nice single image from an existing file
     f1 = h5py.File(fileName, 'r')
-    image = f1[dataset_name][image_index, :, :]
+
+    if (slices):
+
+        xStart = slices[1].start
+        xStop = slices[1].stop
+        xStep = slices[1].step
+        yStart = slices[2].start
+        yStop = slices[2].stop
+        yStep = slices[2].step
+
+        image = f1[dataset_name][image_index, xStart:xStop:xStep,
+                                 yStart:yStop:yStep]
+    else:
+        image = f1[dataset_name][image_index, :, :]
+
     f1.close()
 
     if debug:
@@ -212,22 +241,23 @@ def check_if_mx_file(file_path, debug):
     return is_mx_file, master_file_path
 
 
-def get_image_mask(master_file_path, debug):
+def get_image_mask(master_file_path, slices, debug):
 
     if debug:
         print 'get_image_mask.master_file_path:' + master_file_path
 
     mask_image = 'entry/instrument/detector/detectorSpecific/pixel_mask'
 
-    image_mask = get_image(master_file_path, mask_image, debug)
+    image_mask = get_image(master_file_path, mask_image, slices, debug)
 
     return image_mask
 
 
-def decimate_if_necessary(values, file_path, output_list, debug):
+def decimate_if_necessary(values, slices, file_path, output_list, debug):
 
     if debug:
         print '  type: ' + str(type(values))
+        print '  slices: ' + str(slices)
 
     # The input type is assumed to be numpy.ndarray, could also be a list, but
     # if it's neither of these, just return the input
@@ -245,7 +275,7 @@ def decimate_if_necessary(values, file_path, output_list, debug):
 
     # If it is an MX file, get the image mask and apply it
     if is_mx_file and master_file_path:
-        image_mask = get_image_mask(master_file_path, debug)
+        image_mask = get_image_mask(master_file_path, slices, debug)
         image_out = apply_image_mask(values, data_type, image_mask, 1, 0,
                                      debug)
     else:
@@ -321,8 +351,11 @@ def main(argv):
     if args.debug:
         print args
 
+    # Use slices for zooming
+    slices = [slice(0, 1, 1), slice(1903, 2993, 1), slice(2073, 2969, 1)]
+
     image_org = get_series_image(args.input_file[0], 'entry/data/data', 0,
-                                 args.debug)
+                                 slices, args.debug)
 
     # Check the dataset dimensions and if it falls under my definition of a
     # 'big image'
@@ -334,13 +367,13 @@ def main(argv):
 
     # If it is an MX file, get the image mask and apply it
     if is_mx_file and master_file_path:
-        image_mask = get_image_mask(master_file_path, args.debug)
+        image_mask = get_image_mask(master_file_path, slices, args.debug)
         image_out = apply_image_mask(image_org, data_type, image_mask, 1, 0,
                                      args.debug)
     else:
         image_out = image_org
 
-    image_final = decimate_if_necessary(image_org, args.input_file[0],
+    image_final = decimate_if_necessary(image_org, slices, args.input_file[0],
                                         False, args.debug)
 
     if args.debug:

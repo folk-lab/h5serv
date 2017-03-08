@@ -1719,7 +1719,8 @@ class ValueHandler(BaseHandler):
                         # I got an error:
                         #   TypeError: getDatasetValuesByUuid() got an
                         #       unexpected keyword argument 'format'
-                        # So, have commented this out, might be bad to do?
+                        # So, I have added the third argument, previously
+                        # it was not given - might be bad to do?
                         ##################################
                         # values = db.getDatasetValuesByUuid(
                         #     self.reqUuid, tuple(slices),
@@ -1731,9 +1732,11 @@ class ValueHandler(BaseHandler):
                         item_alias = item['alias']
                         self.log.info('item_alias: ' + str(item_alias))
                         self.log.info('item: ' + str(item))
+                        self.log.info('slices: ' + str(slices))
+                        self.log.info('dims: ' + str(dims))
                         self.log.info('filePath: ' + self.filePath)
                         values = largeImages.decimate_if_necessary(
-                            values, self.filePath, True, True)
+                            values, slices, self.filePath, True, True)
                         ##################################
 
                 else:
