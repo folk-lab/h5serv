@@ -12,22 +12,22 @@
 
 import six
 
-if six.PY3:
-    unicode = str
-
 import os.path as op
 import time
-import hashlib
+# import hashlib
 import logging
 import h5py
 
 from tornado.web import HTTPError
 
-
-import config
+# import config
 from passwordUtil import encrypt_pwd, to_string
 
+if six.PY3:
+    unicode = str
+
 cache_expire_time = 10.0  # ten seconds
+
 
 class AuthClient(object):
 
@@ -38,11 +38,9 @@ class AuthClient(object):
         self.username_cache = {}
         self.userid_cache = {}
 
-
     """
     Password util helper functions
     """
-
 
     def getUserInfo(self, user_name):
         """
@@ -66,7 +64,6 @@ class AuthClient(object):
                 self.log.info("Auth-got cache value")
                 data = item['data']
                 return data
-
 
         # verify file exists and is writable
         if not op.isfile(self.filepath):
@@ -97,7 +94,6 @@ class AuthClient(object):
 
         return data
 
-
     def getUserId(self, user_name):
         """
         getUserId: get id for given user name
@@ -108,7 +104,6 @@ class AuthClient(object):
         if data is not None:
             userid = data['userid']
         return userid
-
 
     def getUserName(self, userid):
         """
@@ -152,7 +147,6 @@ class AuthClient(object):
         self.userid_cache[userid] = item
 
         return user_name
-
 
     def validateUserPassword(self, user_name, password):
         """
