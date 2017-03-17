@@ -36,6 +36,11 @@ import tocUtil
 from httpErrorUtil import errNoToHttpStatus
 from h5watchdog import h5observe
 from passwordUtil import getAuthClient
+import re
+import urllib
+from urllib import urlencode, urlopen
+import json
+# import tornadocas
 import six
 if six.PY3:
     unicode = str
@@ -113,30 +118,45 @@ class BaseHandler(tornado.web.RequestHandler):
     Override of Tornado get_current_user
     """
     def get_current_user(self):
-        user = None
-        pswd = None
-        scheme, _, token = auth_header = self.request.headers.get(
-            'Authorization', '').partition(' ')
-        if scheme and token and scheme.lower() == 'basic':
-            try:
-                if six.PY3:
-                    token_decoded = base64.decodebytes(to_bytes(token))
-                else:
-                    token_decoded = base64.decodestring(token)
-            except binascii.Error:
-                raise HTTPError(400, "Malformed authorization header")
-            if token_decoded.index(b':') < 0:
-                raise HTTPError(400, "Malformed authorization header")
-            user, _, pswd = token_decoded.partition(b':')
-        if user and pswd:
-            # throws exception if passwd is not valid
-            self.username = user
-            self.userid = auth.validateUserPassword(user, pswd)
-            return self.userid
-        else:
-            self.username = None
-            self.userid = -1
-            return None
+        self.log = logging.getLogger("h5serv")
+        self.log.info('get_current_user')
+
+        attributes = self.get_secure_cookie('cas_attributes')
+        self.log.info(str(attributes))
+
+        if attributes:
+            return json.loads(attributes)
+
+        self.username = None
+        self.userid = -1
+        return None
+
+    # def get_current_user(self):
+    #     user = None
+    #     pswd = None
+    #     # scheme, _, token = auth_header = self.request.headers.get(
+    #     scheme, _, token = self.request.headers.get(
+    #         'Authorization', '').partition(' ')
+    #     if scheme and token and scheme.lower() == 'basic':
+    #         try:
+    #             if six.PY3:
+    #                 token_decoded = base64.decodebytes(to_bytes(token))
+    #             else:
+    #                 token_decoded = base64.decodestring(token)
+    #         except binascii.Error:
+    #             raise HTTPError(400, "Malformed authorization header")
+    #         if token_decoded.index(b':') < 0:
+    #             raise HTTPError(400, "Malformed authorization header")
+    #         user, _, pswd = token_decoded.partition(b':')
+    #     if user and pswd:
+    #         # throws exception if passwd is not valid
+    #         self.username = user
+    #         self.userid = auth.validateUserPassword(user, pswd)
+    #         return self.userid
+    #     else:
+    #         self.username = None
+    #         self.userid = -1
+    #         return None
 
     def verifyAcl(self, acl, action):
         """Verify ACL for given action. Raise exception if not
@@ -272,6 +292,7 @@ class BaseHandler(tornado.web.RequestHandler):
                           'updateACL')
                 for field in fields:
                     acl[field] = True
+                obj_uuid = None
                 db.setAcl(obj_uuid, acl)
 
         except IOError as e:
@@ -3090,6 +3111,160 @@ class InfoHandler(RequestHandler):
             self.write(json_encode(response))
 
 
+class CasClientMixin(object):
+    @property
+    def cas_server_url(self):
+        return 'https://cas.maxiv.lu.se/cas/'
+
+    @property
+    def service_url(self):
+        return self.request.full_url()
+
+    def get_next_url(self, default='/'):
+        return self.get_argument('next', default)
+
+    def get_login_url(self):
+        params = {'service': self.service_url}
+        return '%s/login?%s' % (self.cas_server_url, urlencode(params))
+
+    def get_logout_url(self, next_page=None):
+        url = '%s/logout' % self.cas_server_url
+        next_page = next_page or self.get_next_url()
+        if next_page:
+            params = {
+                'url': "%s://%s%s" % (
+                    self.request.protocol, self.request.host,
+                    self.request.uri,
+                ),
+            }
+
+            url += '?' + urlencode(params)
+
+        return url
+
+    def verify_cas(self, *args, **kwargs):
+        return self._verify_cas3(*args, **kwargs)
+
+    # https://bitbucket.org/cpcc/django-cas/src/default/django_cas/
+    #   backends.py
+    def _verify_cas3(self, ticket, service):
+        """Verifies CAS 3.0+ XML-based authentication ticket and returns
+        extended attributes.  Returns username on success and None on
+        failure.
+        """
+
+        try:
+            from xml.etree import ElementTree
+        except ImportError:
+            from elementtree import ElementTree
+
+        params = {'ticket': ticket, 'service': service}
+        url = '%s/proxyValidate?%s' % (self.cas_server_url,
+                                       urlencode(params))
+        page = urlopen(url)
+        try:
+            user = None
+            attributes = {}
+            response = page.read()
+            tree = ElementTree.fromstring(response)
+            if tree[0].tag.endswith('authenticationSuccess'):
+                for element in tree[0]:
+                    if element.tag.endswith('user'):
+                        user = element.text
+                    elif element.tag.endswith('attributes'):
+                        for attribute in element:
+                            attributes[attribute.tag.split("}").pop()] = \
+                                attribute.text
+
+            return user, attributes
+        finally:
+            page.close()
+
+
+class LoginHandler(CasClientMixin, RequestHandler):
+
+    def get(self):
+        self.log = logging.getLogger("h5serv")
+        self.log.info('LoginHandler:get() called')
+
+        self.log.info('self.current_user: ' + str(self.current_user))
+
+        if self.current_user:
+            return self.write({'message': 'login success'})
+
+        ticket = self.get_argument('ticket', None)
+        self.log.info('ticket: ' + str(ticket))
+
+        if ticket:
+            username, attributes = self.verify_cas(ticket, self.service_url)
+
+            self.log.info('username:   ' + str(username))
+            self.log.info('attributes: ' + str(attributes))
+
+            self.set_secure_cookie('cas_attributes', json.dumps(attributes))
+
+            self.log.info('yes ticket, redirecting to: /')
+
+            return self.redirect('/')
+        else:
+            self.log.info('no ticket, redirecting to: ' + self.get_login_url())
+            return self.redirect(self.get_login_url())
+
+
+class LogoutHandler(CasClientMixin, BaseHandler):
+    def get(self):
+        if not self.current_user:
+            return self.redirect(self.get_next_url())
+        else:
+            self.clear_cookie('cas_attributes')
+            return self.redirect(self.get_logout_url('/logout'))
+
+
+class DealWithSTHandler(RequestHandler):
+    '''
+    Validate the SERVER TICKET, return None if failed, otherwise userid.
+    '''
+
+    def get(self):
+
+            log = logging.getLogger("h5serv")
+            log.info('** HELLO **')
+
+            # what you finally get
+            userid = None
+
+            try:
+                server_ticket = self.get_argument('ticket')
+            except Exception, e:
+                log.warning('there is not server ticket in request argumets!')
+                print e
+                raise HTTPError(404)
+
+            # validate the ST
+            validate_suffix = '/proxyValidate'
+            if config.get('version') == 1:
+                validate_suffix = '/validate'
+
+            validate_url = config.get('cas_server') + validate_suffix + \
+                '?service=' + urllib.quote(config.get('service_url')) + \
+                '&ticket=' + urllib.quote(server_ticket)
+
+            response = urllib.urlopen(validate_url).read()
+            pattern = r'<cas:user>(.*)</cas:user>'
+            match = re.search(pattern, response)
+
+            if match:
+                    userid = match.groups()[0]
+            if not userid:
+                    print 'validate failed!'
+                    raise HTTPError(404)
+
+            self.deal_with_userid(userid)
+
+    def deal_with_userid(self, userid):
+            pass
+
+
 def sig_handler(sig, frame):
     log = logging.getLogger("h5serv")
     log.warning('Caught signal: %s', sig)
@@ -3131,6 +3306,12 @@ def make_app():
             settings["debug"] = False
     else:
         settings["debug"] = config_debug
+
+    # Settings for CAS
+    settings['cookie_secret'] = 'blahblah'
+    # settings['login_url'] = 'https://cas.maxiv.lu.se/cas/login/'
+    settings['login_url'] = 'https://cas.maxiv.lu.se/cas/login/' + \
+        '?service=https://w-jasbru-pc-0:6050/login'
 
     favicon_path = "favicon.ico"
     print("dirname path:", os.path.dirname(__file__))
@@ -3178,8 +3359,13 @@ def make_app():
             tornado.web.StaticFileHandler, {'path': favicon_path}),
         url(r"/acls/.*", AclHandler),
         url(r"/acls", AclHandler),
+        # url(r'/login/?', tornadocas.LoginHandler),
+        # url(r'/deal_with_st/?', tornadocas.DealWithSTHandler),
+        url(r'/login/?', LoginHandler),
+        url(r'/logout/?', LogoutHandler),
+        url(r'/deal_with_st/?', DealWithSTHandler),
         url(r"/", RootHandler),
-        url(r".*", DefaultHandler)
+        url(r".*", DefaultHandler),
     ],  **settings)
     return app
 

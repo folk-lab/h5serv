@@ -22,9 +22,9 @@ cfg = {
     'toc_name': '.toc.h5',
     'home_dir': 'home',
     'ssl_port': 6050,
-    'ssl_cert': '',  # add relative path to cert for SSL
-    'ssl_key':  '',  # add relative path to cert key for SSL
-    'ssl_cert_pwd': '',
+    'ssl_cert': 'cert.pem',  # add relative path to cert for SSL
+    'ssl_key':  'key.pem',  # add relative path to cert key for SSL
+    'ssl_cert_pwd': 'maxiv',
     'password_uri': '../util/admin/passwd.h5',
     # 'password_uri': 'mongodb://mongo:27017',
     'mongo_dbname': 'hdfdevtest',
@@ -37,7 +37,12 @@ cfg = {
     'log_level': 'DEBUG',  # ERROR, WARNING, INFO, DEBUG, or NOTSET,
 
     # (ms) set to 0 to disable background processing
-    'background_timeout': 1000
+    'background_timeout': 1000,
+
+    # CAS stuff
+    'cas_server': 'https://cas.maxiv.lu.se/cas/',
+    'service_url': 'https://w-jasbru-pc-0:6050/deal_with_st/',
+    'version': 2,
 }
 
 
