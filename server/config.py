@@ -41,7 +41,7 @@ cfg = {
 
     # CAS stuff
     'cas_server': 'https://cas.maxiv.lu.se/cas/',
-    'service_url': 'https://w-jasbru-pc-0:6050/deal_with_st/',
+    'service_url': 'https://w-jasbru-pc-0:6050/login',
     'version': 2,
 }
 

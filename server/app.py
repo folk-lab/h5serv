@@ -118,6 +118,9 @@ class BaseHandler(tornado.web.RequestHandler):
     Override of Tornado get_current_user
     """
     def get_current_user(self):
+        self.username = None
+        self.userid = -1
+
         self.log = logging.getLogger("h5serv")
         self.log.info('get_current_user')
 
@@ -127,8 +130,6 @@ class BaseHandler(tornado.web.RequestHandler):
         if attributes:
             return json.loads(attributes)
 
-        self.username = None
-        self.userid = -1
         return None
 
     # def get_current_user(self):
@@ -2912,7 +2913,7 @@ class RootHandler(BaseHandler):
                 acl = db.getAcl(rootUUID, self.userid)
 
         except IOError as e:
-            self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
+            self.log.info("IOError: " + str(e.errno) + " " + str(e.strerror))
             status = errNoToHttpStatus(e.errno)
             raise HTTPError(status, reason=e.strerror)
 
@@ -3148,25 +3149,39 @@ class CasClientMixin(object):
     # https://bitbucket.org/cpcc/django-cas/src/default/django_cas/
     #   backends.py
     def _verify_cas3(self, ticket, service):
-        """Verifies CAS 3.0+ XML-based authentication ticket and returns
-        extended attributes.  Returns username on success and None on
-        failure.
         """
+        Verifies CAS 3.0+ XML-based authentication ticket and returns extended
+        attributes.  Returns username on success and None on failure.
+        """
+
+        self.log = logging.getLogger("h5serv")
+        self.log.info('CasClientMixin._verify_cas3() called')
 
         try:
             from xml.etree import ElementTree
         except ImportError:
             from elementtree import ElementTree
 
-        params = {'ticket': ticket, 'service': service}
-        url = '%s/proxyValidate?%s' % (self.cas_server_url,
-                                       urlencode(params))
+        # params = {'ticket': ticket, 'service': service}
+        params = {'ticket': ticket, 'service':
+                  'https://w-jasbru-pc-0:6050/login'}
+        self.log.info('params: ' + str(params))
+        url = '%s/proxyValidate?%s' % (self.cas_server_url, urlencode(params))
         page = urlopen(url)
+
+        self.log.info('url sent to CAS server: ')
+        self.log.info(url)
+
         try:
             user = None
             attributes = {}
+
             response = page.read()
+            self.log.info('response: ' + str(response))
+
             tree = ElementTree.fromstring(response)
+            self.log.info('tree: ' + str(tree))
+
             if tree[0].tag.endswith('authenticationSuccess'):
                 for element in tree[0]:
                     if element.tag.endswith('user'):
@@ -3177,6 +3192,7 @@ class CasClientMixin(object):
                                 attribute.text
 
             return user, attributes
+
         finally:
             page.close()
 
