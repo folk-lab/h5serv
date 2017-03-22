@@ -32,7 +32,8 @@ cfg = {
     'static_path': r'../static',
 
     # set to None to disallow CORS (cross-origin resource sharing)
-    'cors_domain': '*',
+    # 'cors_domain': '*',
+    'cors_domain': 'https://w-jasbru-pc-0.maxiv.lu.se',
     'log_file': r'../log/h5serv.log',
     'log_level': 'DEBUG',  # ERROR, WARNING, INFO, DEBUG, or NOTSET,
 
@@ -40,9 +41,8 @@ cfg = {
     'background_timeout': 1000,
 
     # CAS stuff
-    'cas_server': 'https://cas.maxiv.lu.se/cas/',
-    'service_url': 'https://w-jasbru-pc-0:6050/login',
-    'version': 2,
+    # 'service_url': 'https://w-jasbru-pc-0:6050/login',
+    # 'version': 2,
 }
 
 

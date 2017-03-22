@@ -23,7 +23,7 @@ import tornado.httpserver
 import sys
 import ssl
 import base64
-import binascii
+# import binascii
 from tornado.ioloop import IOLoop
 from tornado.web import RequestHandler, Application, url, HTTPError
 from tornado.escape import json_encode, json_decode, url_escape, url_unescape
@@ -36,11 +36,8 @@ import tocUtil
 from httpErrorUtil import errNoToHttpStatus
 from h5watchdog import h5observe
 from passwordUtil import getAuthClient
-import re
 import urllib
-from urllib import urlencode, urlopen
 import json
-# import tornadocas
 import six
 if six.PY3:
     unicode = str
@@ -103,8 +100,11 @@ class BaseHandler(tornado.web.RequestHandler):
     """
     def set_default_headers(self):
         cors_domain = config.get('cors_domain')
+        self.log = logging.getLogger("h5serv")
+        self.log.info('cors_domain: ' + str(cors_domain))
         if cors_domain:
             self.set_header('Access-Control-Allow-Origin', cors_domain)
+            self.set_header('Access-Control-Allow-Credentials', 'true')
 
     """
     Set allows heards per CORS policy
@@ -122,10 +122,10 @@ class BaseHandler(tornado.web.RequestHandler):
         self.userid = -1
 
         self.log = logging.getLogger("h5serv")
-        self.log.info('get_current_user')
+        self.log.info('BaseHandler.get_current_user')
 
         attributes = self.get_secure_cookie('cas_attributes')
-        self.log.info(str(attributes))
+        self.log.info('attributes: ' + str(attributes))
 
         if attributes:
             return json.loads(attributes)
@@ -3126,7 +3126,9 @@ class CasClientMixin(object):
 
     def get_login_url(self):
         params = {'service': self.service_url}
-        return '%s/login?%s' % (self.cas_server_url, urlencode(params))
+        self.log = logging.getLogger("h5serv")
+        self.log.info('self.service_url: ' + str(self.service_url))
+        return '%s/login?%s' % (self.cas_server_url, urllib.urlencode(params))
 
     def get_logout_url(self, next_page=None):
         url = '%s/logout' % self.cas_server_url
@@ -3139,35 +3141,32 @@ class CasClientMixin(object):
                 ),
             }
 
-            url += '?' + urlencode(params)
+            url += '?' + urllib.urlencode(params)
 
         return url
 
-    def verify_cas(self, *args, **kwargs):
-        return self._verify_cas3(*args, **kwargs)
-
-    # https://bitbucket.org/cpcc/django-cas/src/default/django_cas/
-    #   backends.py
-    def _verify_cas3(self, ticket, service):
+    def verify_cas(self, ticket, service):
         """
         Verifies CAS 3.0+ XML-based authentication ticket and returns extended
         attributes.  Returns username on success and None on failure.
         """
 
         self.log = logging.getLogger("h5serv")
-        self.log.info('CasClientMixin._verify_cas3() called')
+        self.log.info('CasClientMixin.verify_cas() called')
 
         try:
             from xml.etree import ElementTree
         except ImportError:
             from elementtree import ElementTree
 
+        self.log.info('service: ' + str(service))
         # params = {'ticket': ticket, 'service': service}
         params = {'ticket': ticket, 'service':
                   'https://w-jasbru-pc-0:6050/login'}
         self.log.info('params: ' + str(params))
-        url = '%s/proxyValidate?%s' % (self.cas_server_url, urlencode(params))
-        page = urlopen(url)
+        url = '%s/p3/serviceValidate?%s' % (self.cas_server_url,
+                                            urllib.urlencode(params))
+        page = urllib.urlopen(url)
 
         self.log.info('url sent to CAS server: ')
         self.log.info(url)
@@ -3197,12 +3196,13 @@ class CasClientMixin(object):
             page.close()
 
 
-class LoginHandler(CasClientMixin, RequestHandler):
+class LoginHandler(BaseHandler, CasClientMixin, RequestHandler):
 
     def get(self):
         self.log = logging.getLogger("h5serv")
         self.log.info('LoginHandler:get() called')
 
+        self.get_current_user()
         self.log.info('self.current_user: ' + str(self.current_user))
 
         if self.current_user:
@@ -3229,56 +3229,15 @@ class LoginHandler(CasClientMixin, RequestHandler):
 
 class LogoutHandler(CasClientMixin, BaseHandler):
     def get(self):
+        self.log = logging.getLogger("h5serv")
+        self.log.info('LogoutHandler:get() called')
+        self.log.info('self.current_user: ' + str(self.current_user))
+
         if not self.current_user:
             return self.redirect(self.get_next_url())
         else:
             self.clear_cookie('cas_attributes')
             return self.redirect(self.get_logout_url('/logout'))
-
-
-class DealWithSTHandler(RequestHandler):
-    '''
-    Validate the SERVER TICKET, return None if failed, otherwise userid.
-    '''
-
-    def get(self):
-
-            log = logging.getLogger("h5serv")
-            log.info('** HELLO **')
-
-            # what you finally get
-            userid = None
-
-            try:
-                server_ticket = self.get_argument('ticket')
-            except Exception, e:
-                log.warning('there is not server ticket in request argumets!')
-                print e
-                raise HTTPError(404)
-
-            # validate the ST
-            validate_suffix = '/proxyValidate'
-            if config.get('version') == 1:
-                validate_suffix = '/validate'
-
-            validate_url = config.get('cas_server') + validate_suffix + \
-                '?service=' + urllib.quote(config.get('service_url')) + \
-                '&ticket=' + urllib.quote(server_ticket)
-
-            response = urllib.urlopen(validate_url).read()
-            pattern = r'<cas:user>(.*)</cas:user>'
-            match = re.search(pattern, response)
-
-            if match:
-                    userid = match.groups()[0]
-            if not userid:
-                    print 'validate failed!'
-                    raise HTTPError(404)
-
-            self.deal_with_userid(userid)
-
-    def deal_with_userid(self, userid):
-            pass
 
 
 def sig_handler(sig, frame):
@@ -3325,9 +3284,6 @@ def make_app():
 
     # Settings for CAS
     settings['cookie_secret'] = 'blahblah'
-    # settings['login_url'] = 'https://cas.maxiv.lu.se/cas/login/'
-    settings['login_url'] = 'https://cas.maxiv.lu.se/cas/login/' + \
-        '?service=https://w-jasbru-pc-0:6050/login'
 
     favicon_path = "favicon.ico"
     print("dirname path:", os.path.dirname(__file__))
@@ -3375,11 +3331,8 @@ def make_app():
             tornado.web.StaticFileHandler, {'path': favicon_path}),
         url(r"/acls/.*", AclHandler),
         url(r"/acls", AclHandler),
-        # url(r'/login/?', tornadocas.LoginHandler),
-        # url(r'/deal_with_st/?', tornadocas.DealWithSTHandler),
         url(r'/login/?', LoginHandler),
         url(r'/logout/?', LogoutHandler),
-        url(r'/deal_with_st/?', DealWithSTHandler),
         url(r"/", RootHandler),
         url(r".*", DefaultHandler),
     ],  **settings)
