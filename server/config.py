@@ -39,10 +39,6 @@ cfg = {
 
     # (ms) set to 0 to disable background processing
     'background_timeout': 1000,
-
-    # CAS stuff
-    # 'service_url': 'https://w-jasbru-pc-0:6050/login',
-    # 'version': 2,
 }
 
 

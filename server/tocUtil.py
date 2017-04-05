@@ -33,8 +33,10 @@ def getTocFilePath(user=None):
         toc_file_path = fileUtil.join(datapath, config.get('toc_name'))
     else:
         #print("get user toc")
-        toc_file_path = fileUtil.join(datapath, config.get('home_dir'))
-        toc_file_path = fileUtil.join(toc_file_path, config.get('toc_name'))
+        # toc_file_path = fileUtil.join(datapath, config.get('home_dir'))
+        # toc_file_path = fileUtil.join(toc_file_path, config.get('toc_name'))
+
+        toc_file_path = fileUtil.join(datapath, config.get('toc_name'))
 
     return toc_file_path
 

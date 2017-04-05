@@ -12,6 +12,9 @@
 
 import hdf5plugin
 import largeImages
+from pwd import getpwnam
+from grp import getgrall, getgrgid
+import stat
 import numpy
 import time
 import signal
@@ -120,15 +123,43 @@ class BaseHandler(tornado.web.RequestHandler):
     def get_current_user(self):
         self.username = None
         self.userid = -1
+        self.usergroupids = []
 
         self.log = logging.getLogger("h5serv")
         self.log.info('BaseHandler.get_current_user')
 
         attributes = self.get_secure_cookie('cas_attributes')
-        self.log.info('attributes: ' + str(attributes))
 
         if attributes:
-            return json.loads(attributes)
+            attributes = json.loads(attributes)
+
+            self.username = attributes['userName']
+            self.log.info('self.username: ' + str(self.username))
+
+            # Get user id number - quick fix, Should really get this from CAS,
+            # but that item is not available at this time
+            self.userid = getpwnam(self.username).pw_uid
+            self.log.info('self.userid: ' + str(self.userid))
+
+            # Get the groups - also a quick fix
+            # The group id numbers for all groups for this user
+            self.usergroupids = [g.gr_gid for g in getgrall() if self.username
+                                 in g.gr_mem]
+
+            # Get the group id number for the user name
+            gid = getpwnam(self.username).pw_gid
+            self.usergroupids.append(getgrgid(gid).gr_gid)
+
+            self.log.info('gid: ' + str(gid))
+            self.log.info('self.usergroupids: ' + str(self.usergroupids))
+
+            for key, value in attributes.iteritems():
+                self.log.info('attributes[' + str(key) + ']: ' +
+                              str(value))
+
+            return True
+
+        self.log.info('no logged in user')
 
         return None
 
@@ -171,15 +202,15 @@ class BaseHandler(tornado.web.RequestHandler):
             self.set_header('WWW-Authenticate', 'basic realm="h5serv"')
             raise HTTPError(401, "Unauthorized")
             # raise HTTPError(401, message="provide  password")
-        # validated user, but doesn't have access
 
+        # validated user, but doesn't have access
         self.log.info("unauthorized access for userid: " + str(self.userid))
         raise HTTPError(403, "Access is not permitted")
 
     """
     baseHandler - log request and set state to be used by method implementation
     """
-    def baseHandler(self, checkExists=True):
+    def baseHandler(self, checkExists=True, itemType=False):
 
         # Output request URI to log
         self.log = logging.getLogger("h5serv")
@@ -192,8 +223,6 @@ class BaseHandler(tornado.web.RequestHandler):
         if "X-Forwarded-Host" in self.request.headers:
             host = self.request.headers["X-Forwarded-Host"]
 
-        # domain_encoded = self.get_argument("host")
-        # print("domain_encoded: ", domain_encoded)
         self.domain = self.get_query_argument("host", default=None)
 
         if not self.domain:
@@ -204,8 +233,26 @@ class BaseHandler(tornado.web.RequestHandler):
 
         # sets self.userid, self.username
         self.get_current_user()
-        self.reqUuid = self.getRequestId()
         self.filePath = self.getFilePath(self.domain, checkExists)
+        self.log.info("self.filePath: " + self.filePath)
+
+        self.reqUuid = self.getRequestId()
+        self.log.info("self.reqUuid: " + str(self.reqUuid))
+        # if self.reqUuid is None and self.filePath is not None:
+        #     with Hdf5db(self.filePath, app_logger=self.log) as db:
+        #         self.reqUuid = db.getUUIDByPath(self.filePath)
+        # self.log.info("self.reqUuid: " + str(self.reqUuid))
+        # if itemType:
+        #     self.log.info('itemType ? : ' + itemType)
+        # # if self.reqUuid is not None:
+        # #     with Hdf5db(self.filePath, app_logger=self.log) as db:
+        # #         db.getPathByUUID(self.reqUuid)
+
+        # get file permisssions and ownership, set ACL
+        if self.reqUuid is not None:
+            can_user_read_file = self.can_user_read_file()
+            self.log.info('can_user_read_file: ' + str(can_user_read_file))
+            self.set_file_ACL(can_user_read_file)
 
         self.href = protocol + '://' + host
         self.log.info("baseHandler, href: " + self.href)
@@ -215,6 +262,83 @@ class BaseHandler(tornado.web.RequestHandler):
             msg += ", username: " + to_str(self.username)
         msg += "}"
         self.log.info(msg)
+
+    '''
+    Look at the ownership and permissions of a file and determine if the logged
+    in user has read access or not - ignore write access for now.
+    '''
+    def can_user_read_file(self):
+
+        readable_as_owner = False
+        readable_by_group = False
+        readable_by_other = False
+
+        # Ignore the table of contents file
+        if self.filePath.endswith(config.get('toc_name')):
+            return False
+
+        # Ignore dot files - per file table of contents files
+
+        self.log.info("actual file?: " + self.filePath)
+
+        # Get the owner and group ids, mode, and a bunch of other information
+        # about the file
+        (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime) = \
+            os.stat(self.filePath)
+
+        # Check if this is a file or directory
+        self.log.info('stat.S_ISDIR(mode): ' + str(stat.S_ISDIR(mode)))
+        self.log.info('stat.S_ISREG(mode): ' + str(stat.S_ISREG(mode)))
+        self.log.info('stat.S_ISLNK(mode): ' + str(stat.S_ISLNK(mode)))
+
+        # Check if the user is the owner and has read permissions
+        if uid == self.userid:
+            user_readable = bool(mode & stat.S_IRUSR)
+            if user_readable:
+                readable_as_owner = True
+
+        # Check if the user is in the right group and has read permissions
+        if gid in self.usergroupids:
+            group_readable = bool(mode & stat.S_IRGRP)
+            if group_readable:
+                readable_by_group = True
+
+        # Check if this file is readable by others
+        readable_by_other = bool(mode & stat.S_IROTH)
+
+        self.log.info('readable_as_owner: ' + str(readable_as_owner))
+        self.log.info('readable_by_group: ' + str(readable_by_group))
+        self.log.info('readable_by_other: ' + str(readable_by_other))
+
+        if readable_as_owner or readable_by_group or readable_by_other:
+            return True
+        else:
+            return False
+
+    def set_file_ACL(self, can_user_read_file):
+
+        self.log.info('set_file_ACL(' + str(can_user_read_file) + ')')
+        self.log.info("self.filePath: " + self.filePath)
+
+        # Ignore the table of contents file
+        if self.filePath.endswith(config.get('toc_name')):
+            return False
+
+        with Hdf5db(self.filePath, app_logger=self.log) as db:
+            acl = db.getDefaultAcl()
+            acl['userid'] = self.userid
+            fields = ('create', 'read', 'update', 'delete', 'readACL',
+                      'updateACL')
+            for field in fields:
+                if field == 'read' and can_user_read_file:
+                    acl[field] = True
+                else:
+                    acl[field] = False
+
+            self.log.info('acl: ' + str(acl))
+            self.log.info('self.reqUuid: ' + str(self.reqUuid))
+
+            db.setAcl(self.reqUuid, acl)
 
     """
     getExternal uri - return url for given domain
@@ -276,7 +400,8 @@ class BaseHandler(tornado.web.RequestHandler):
         log.info("setDeaultAcl -- userid: " + str(self.userid))
         if self.userid <= 0:
             raise HTTPError(500, "Expected userid")
-        username = auth.getUserName(self.userid)
+        # username = auth.getUserName(self.userid)
+        username = self.username
         filePath = tocUtil.getTocFilePath(username)
         try:
             fileUtil.verifyFile(filePath)
@@ -285,15 +410,19 @@ class BaseHandler(tornado.web.RequestHandler):
             return
         try:
             with Hdf5db(filePath, app_logger=self.log) as db:
-                # rootUUID = db.getUUIDByPath('/')
-                # current_user_acl = db.getAcl(rootUUID, self.userid)
                 acl = db.getDefaultAcl()
                 acl['userid'] = self.userid
                 fields = ('create', 'read', 'update', 'delete', 'readACL',
                           'updateACL')
+
                 for field in fields:
+                    # acl[field] = False
                     acl[field] = True
+
                 obj_uuid = None
+
+                self.log.info("acl: " + str(acl))
+
                 db.setAcl(obj_uuid, acl)
 
         except IOError as e:
@@ -321,13 +450,6 @@ class BaseHandler(tornado.web.RequestHandler):
         # domain name)
         filePath = self.nameDecode(filePath)
 
-        # The above seems not to work when using addresses such as:
-        #   http://w-jasbru-pc-0.maxiv.lu.se:5000/
-        # even though it works fine with:
-        #   http://w-jasbru-pc-0:5000/
-        # I suppose what follows is not a proper fix...
-        # filePath = tocFilePath
-
         if checkExists:
             while True:
                 if fileUtil.isFile(filePath):
@@ -352,6 +474,7 @@ class BaseHandler(tornado.web.RequestHandler):
                     filePath = self.nameDecode(filePath)
                 else:
                     break
+
             self.log.info("verifyFile: " + filePath)
             fileUtil.verifyFile(filePath)  # throws exception if not found
 
@@ -466,7 +589,7 @@ class BaseHandler(tornado.web.RequestHandler):
 
 class LinkCollectionHandler(BaseHandler):
     def get(self):
-        self.baseHandler()
+        self.baseHandler(itemType='links')
 
         # Get optional query parameters
         limit = self.get_query_argument("Limit", 0)
@@ -485,8 +608,16 @@ class LinkCollectionHandler(BaseHandler):
         rootUUID = None
         try:
             with Hdf5db(self.filePath, app_logger=self.log) as db:
+
+                self.log.info('self.filePath: ' + self.filePath)
+
                 rootUUID = db.getUUIDByPath('/')
                 current_user_acl = db.getAcl(self.reqUuid, self.userid)
+
+                self.log.info('self.reqUuid: ' + str(self.reqUuid))
+                db.getPathByUUID(self.reqUuid, 'groups')
+                self.log.info('self.userid: ' + str(self.userid))
+                self.log.info('current_user_acl: ' + str(current_user_acl))
 
                 # throws exception is unauthorized
                 self.verifyAcl(current_user_acl, 'read')
@@ -1736,17 +1867,6 @@ class ValueHandler(BaseHandler):
 
                         self.log.info("response_content_type: " +
                                       response_content_type)
-                        ##################################
-                        # Jason - for some reason, on one particualr server,
-                        # I got an error:
-                        #   TypeError: getDatasetValuesByUuid() got an
-                        #       unexpected keyword argument 'format'
-                        # So, I have added the third argument, previously
-                        # it was not given - might be bad to do?
-                        ##################################
-                        # values = db.getDatasetValuesByUuid(
-                        #     self.reqUuid, tuple(slices),
-                        #     format=response_content_type)
                         values = db.getDatasetValuesByUuid(
                             self.reqUuid, tuple(slices), response_content_type)
 
@@ -2909,8 +3029,16 @@ class RootHandler(BaseHandler):
 
         try:
             with Hdf5db(self.filePath, app_logger=self.log) as db:
+
                 rootUUID = db.getUUIDByPath('/')
+
+                self.log.info("rootUUID: " + str(rootUUID))
+                self.log.info("self.filePath: " + str(self.filePath))
+                self.log.info("self.userid: " + str(self.userid))
+
                 acl = db.getAcl(rootUUID, self.userid)
+
+                self.log.info("acl: " + str(acl))
 
         except IOError as e:
             self.log.info("IOError: " + str(e.errno) + " " + str(e.strerror))
@@ -2941,6 +3069,8 @@ class RootHandler(BaseHandler):
         return response
 
     def get(self):
+
+        self.log.info('RootHandler.get')
 
         self.baseHandler()
         """
