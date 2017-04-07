@@ -210,7 +210,7 @@ class BaseHandler(tornado.web.RequestHandler):
     """
     baseHandler - log request and set state to be used by method implementation
     """
-    def baseHandler(self, checkExists=True, itemType=False):
+    def baseHandler(self, checkExists=True):
 
         # Output request URI to log
         self.log = logging.getLogger("h5serv")
@@ -241,16 +241,13 @@ class BaseHandler(tornado.web.RequestHandler):
         # if self.reqUuid is None and self.filePath is not None:
         #     with Hdf5db(self.filePath, app_logger=self.log) as db:
         #         self.reqUuid = db.getUUIDByPath(self.filePath)
-        # self.log.info("self.reqUuid: " + str(self.reqUuid))
-        # if itemType:
-        #     self.log.info('itemType ? : ' + itemType)
         # # if self.reqUuid is not None:
         # #     with Hdf5db(self.filePath, app_logger=self.log) as db:
         # #         db.getPathByUUID(self.reqUuid)
 
         # get file permisssions and ownership, set ACL
         if self.reqUuid is not None:
-            can_user_read_file = self.can_user_read_file()
+            can_user_read_file = self.can_user_read_file(self.filePath)
             self.log.info('can_user_read_file: ' + str(can_user_read_file))
             self.set_file_ACL(can_user_read_file)
 
@@ -267,24 +264,24 @@ class BaseHandler(tornado.web.RequestHandler):
     Look at the ownership and permissions of a file and determine if the logged
     in user has read access or not - ignore write access for now.
     '''
-    def can_user_read_file(self):
+    def can_user_read_file(self, filepath):
+
+        self.log.info("actual file?: " + filepath)
 
         readable_as_owner = False
         readable_by_group = False
         readable_by_other = False
 
         # Ignore the table of contents file
-        if self.filePath.endswith(config.get('toc_name')):
+        if filepath.endswith(config.get('toc_name')):
             return False
 
         # Ignore dot files - per file table of contents files
 
-        self.log.info("actual file?: " + self.filePath)
-
         # Get the owner and group ids, mode, and a bunch of other information
         # about the file
         (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime) = \
-            os.stat(self.filePath)
+            os.stat(filepath)
 
         # Check if this is a file or directory
         self.log.info('stat.S_ISDIR(mode): ' + str(stat.S_ISDIR(mode)))
@@ -589,7 +586,7 @@ class BaseHandler(tornado.web.RequestHandler):
 
 class LinkCollectionHandler(BaseHandler):
     def get(self):
-        self.baseHandler(itemType='links')
+        self.baseHandler()
 
         # Get optional query parameters
         limit = self.get_query_argument("Limit", 0)
@@ -648,13 +645,24 @@ class LinkCollectionHandler(BaseHandler):
             link_item['href'] = item['href'] = self.href + '/groups/' + \
                 self.reqUuid + '/links/' + self.nameEncode(item['title']) + \
                 hostQuery
+
+            self.log.info('item: ' + str(item))
+            parent_group_uuid = self.reqUuid
+            self.log.info('parent_group_uuid: ' + str(parent_group_uuid))
+
+            # Folders
             if item['class'] == 'H5L_TYPE_HARD':
                 link_item['id'] = item['id']
                 link_item['collection'] = item['collection']
                 link_item['target'] = self.href + '/' + item['collection'] + \
                     '/' + item['id'] + hostQuery
+
+                link_item['readable'] = True
+
             elif item['class'] == 'H5L_TYPE_SOFT':
                 link_item['h5path'] = item['h5path']
+
+            # Data files
             elif item['class'] == 'H5L_TYPE_EXTERNAL':
                 link_item['h5path'] = item['h5path']
                 h5domain = self.nameEncode(item['file'])
@@ -662,6 +670,13 @@ class LinkCollectionHandler(BaseHandler):
                 if link_item['h5domain'].endswith(config.get('domain')):
                     link_item['target'] = self.getExternalHref(
                         h5domain, link_item['h5path'])
+
+                    # Not sure if this is the best place to have this:
+                    # Check if the linked to item is readable by the logged in
+                    # user, add that information to output
+                    filepath = self.getFilePath(h5domain, True)
+                    self.log.info("filepath: " + filepath)
+                    link_item['readable'] = self.can_user_read_file(filepath)
 
             links.append(link_item)
 
@@ -2460,6 +2475,67 @@ class AttributeHandler(BaseHandler):
         self.log.info("Attribute delete succeeded")
 
 
+class IsReadableHandler(BaseHandler):
+
+    def get(self):
+        self.baseHandler()
+
+        can_user_read_file = self.can_user_read_file(self.filePath)
+        self.log.info('can_user_read_file: ' + str(can_user_read_file))
+
+        response = {}
+
+        hrefs = []
+        rootUUID = None
+        item = None
+
+        try:
+            with Hdf5db(self.filePath, app_logger=self.log) as db:
+                rootUUID = db.getUUIDByPath('/')
+                self.log.info('rootUUID: ' + str(rootUUID))
+                acl = db.getAcl(self.reqUuid, self.userid)
+                self.verifyAcl(acl, 'read')  # throws exception is unauthorized
+                item = db.getGroupItemByUuid(self.reqUuid)
+
+        except IOError as e:
+            self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
+            status = errNoToHttpStatus(e.errno)
+            raise HTTPError(status, reason=e.strerror)
+
+        # got everything we need, put together the response
+
+        hrefs.append({
+            'rel': 'self',
+            'href': self.getHref('groups/' + self.reqUuid)
+        })
+        hrefs.append({
+            'rel': 'links',
+            'href': self.getHref('groups/' + self.reqUuid + '/links')
+        })
+        hrefs.append({
+            'rel': 'root',
+            'href': self.getHref('groups/' + rootUUID)
+        })
+        hrefs.append({
+            'rel': 'home',
+            'href': self.getHref('')
+        })
+        hrefs.append({
+            'rel': 'attributes',
+            'href': self.getHref('groups/' + self.reqUuid + '/attributes')
+        })
+        response['id'] = self.reqUuid
+        response['readable'] = True
+        response['created'] = unixTimeToUTC(item['ctime'])
+        response['lastModified'] = unixTimeToUTC(item['mtime'])
+        response['attributeCount'] = item['attributeCount']
+        response['linkCount'] = item['linkCount']
+        response['hrefs'] = hrefs
+
+        self.set_header('Content-Type', 'application/json')
+        self.write(json_encode(response))
+
+
 class GroupHandler(BaseHandler):
 
     def get(self):
@@ -3450,6 +3526,7 @@ def make_app():
         url(r"/groups/.*/links/.*", LinkHandler),
         url(r"/groups/.*/links\?.*", LinkCollectionHandler),
         url(r"/groups/.*/links", LinkCollectionHandler),
+        url(r"/groups/.*/isreadable", IsReadableHandler),
         url(r"/groups/", GroupHandler),
         url(r"/groups/.*", GroupHandler),
         url(r"/groups\?.*", GroupCollectionHandler),
