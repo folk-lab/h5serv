@@ -331,7 +331,7 @@ def main(argv):
                         help='series index for the desired image')
     parser.add_argument("-m", '--mask_file', required=False,
                         default='tau1-tau_2_master.h5',
-                        help='series index for the desired image')
+                        help='the hdf5 file containing the mask')
     parser.add_argument('-g', '--graphical_display', action='store_true',
                         help='Debug output')
 

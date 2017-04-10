@@ -12,6 +12,7 @@
 
 import hdf5plugin
 import largeImages
+import permissions
 from pwd import getpwnam
 from grp import getgrall, getgrgid
 import stat
@@ -657,7 +658,11 @@ class LinkCollectionHandler(BaseHandler):
                 link_item['target'] = self.href + '/' + item['collection'] + \
                     '/' + item['id'] + hostQuery
 
-                link_item['readable'] = True
+                # Check the folder permissions, check if logged in user can
+                # read the contents
+                link_item['readable'] = permissions.get_info_from_uuid(
+                    '../data/' + config.get('toc_name'), item['id'],
+                    self.username, False)
 
             elif item['class'] == 'H5L_TYPE_SOFT':
                 link_item['h5path'] = item['h5path']
@@ -678,7 +683,13 @@ class LinkCollectionHandler(BaseHandler):
                     self.log.info("filepath: " + filepath)
                     link_item['readable'] = self.can_user_read_file(filepath)
 
-            links.append(link_item)
+            # If the item is not readable by the logged in user, don't add it
+            # to the output
+            if 'readable' in link_item:
+                if link_item['readable']:
+                    links.append(link_item)
+            else:
+                links.append(link_item)
 
         response['links'] = links
 
@@ -2475,67 +2486,6 @@ class AttributeHandler(BaseHandler):
         self.log.info("Attribute delete succeeded")
 
 
-class IsReadableHandler(BaseHandler):
-
-    def get(self):
-        self.baseHandler()
-
-        can_user_read_file = self.can_user_read_file(self.filePath)
-        self.log.info('can_user_read_file: ' + str(can_user_read_file))
-
-        response = {}
-
-        hrefs = []
-        rootUUID = None
-        item = None
-
-        try:
-            with Hdf5db(self.filePath, app_logger=self.log) as db:
-                rootUUID = db.getUUIDByPath('/')
-                self.log.info('rootUUID: ' + str(rootUUID))
-                acl = db.getAcl(self.reqUuid, self.userid)
-                self.verifyAcl(acl, 'read')  # throws exception is unauthorized
-                item = db.getGroupItemByUuid(self.reqUuid)
-
-        except IOError as e:
-            self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
-            status = errNoToHttpStatus(e.errno)
-            raise HTTPError(status, reason=e.strerror)
-
-        # got everything we need, put together the response
-
-        hrefs.append({
-            'rel': 'self',
-            'href': self.getHref('groups/' + self.reqUuid)
-        })
-        hrefs.append({
-            'rel': 'links',
-            'href': self.getHref('groups/' + self.reqUuid + '/links')
-        })
-        hrefs.append({
-            'rel': 'root',
-            'href': self.getHref('groups/' + rootUUID)
-        })
-        hrefs.append({
-            'rel': 'home',
-            'href': self.getHref('')
-        })
-        hrefs.append({
-            'rel': 'attributes',
-            'href': self.getHref('groups/' + self.reqUuid + '/attributes')
-        })
-        response['id'] = self.reqUuid
-        response['readable'] = True
-        response['created'] = unixTimeToUTC(item['ctime'])
-        response['lastModified'] = unixTimeToUTC(item['mtime'])
-        response['attributeCount'] = item['attributeCount']
-        response['linkCount'] = item['linkCount']
-        response['hrefs'] = hrefs
-
-        self.set_header('Content-Type', 'application/json')
-        self.write(json_encode(response))
-
-
 class GroupHandler(BaseHandler):
 
     def get(self):
@@ -3526,7 +3476,6 @@ def make_app():
         url(r"/groups/.*/links/.*", LinkHandler),
         url(r"/groups/.*/links\?.*", LinkCollectionHandler),
         url(r"/groups/.*/links", LinkCollectionHandler),
-        url(r"/groups/.*/isreadable", IsReadableHandler),
         url(r"/groups/", GroupHandler),
         url(r"/groups/.*", GroupHandler),
         url(r"/groups\?.*", GroupCollectionHandler),
