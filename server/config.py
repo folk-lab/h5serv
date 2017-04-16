@@ -34,6 +34,7 @@ cfg = {
     # set to None to disallow CORS (cross-origin resource sharing)
     # 'cors_domain': '*',
     'cors_domain': 'https://w-jasbru-pc-0.maxiv.lu.se',
+    # 'cors_domain': 'https://cas.maxiv.lu.se',
     'log_file': r'../log/h5serv.log',
     'log_level': 'DEBUG',  # ERROR, WARNING, INFO, DEBUG, or NOTSET,
 

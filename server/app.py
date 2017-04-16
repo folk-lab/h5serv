@@ -13,6 +13,7 @@
 import hdf5plugin
 import largeImages
 import permissions
+import requests
 from pwd import getpwnam
 from grp import getgrall, getgrgid
 import stat
@@ -129,10 +130,23 @@ class BaseHandler(tornado.web.RequestHandler):
         self.log = logging.getLogger("h5serv")
         self.log.info('BaseHandler.get_current_user')
 
-        attributes = self.get_secure_cookie('cas_attributes')
+        self.log.info("header keys...")
+        for k in self.request.headers.keys():
+            self.log.info("header[" + k + "]: " + self.request.headers[k])
+        self.log.info('remote_ip: ' + self.request.remote_ip)
 
+        # attributes = self.get_secure_cookie('cas_attributes')
+        attributes = self.get_secure_cookie('TGC')
+        # attributes = self.get_secure_cookie('JSESSIONID')
+        # attributes = self.get_secure_cookie('userName')
+        # attributes = self.get_secure_cookie('userSucker')
+        # attributes = self.get_cookie('userSucker')
         if attributes:
             attributes = json.loads(attributes)
+        self.log.info(attributes)
+        self.log.info(bool(attributes))
+
+        if attributes:
 
             self.username = attributes['userName']
             self.log.info('self.username: ' + str(self.username))
@@ -3318,7 +3332,8 @@ class CasClientMixin(object):
         self.log.info('service: ' + str(service))
         # params = {'ticket': ticket, 'service': service}
         params = {'ticket': ticket, 'service':
-                  'https://w-jasbru-pc-0:6050/login'}
+                  'https://w-jasbru-pc-0.maxiv.lu.se/hdf5-web-gui/html/'}
+        #           'https://w-jasbru-pc-0:6050/login'}
         self.log.info('params: ' + str(params))
         url = '%s/p3/serviceValidate?%s' % (self.cas_server_url,
                                             urllib.urlencode(params))
@@ -3350,6 +3365,31 @@ class CasClientMixin(object):
 
         finally:
             page.close()
+
+
+class LoginCheckHandler(BaseHandler, CasClientMixin, RequestHandler):
+
+    def get(self):
+
+        self.log = logging.getLogger("h5serv")
+        self.log.info('LoginHandler:get() called')
+
+        ticket = self.get_argument('ticket', None)
+        self.log.info('ticket: ' + str(ticket))
+
+        if ticket:
+            username, attributes = self.verify_cas(ticket, self.service_url)
+
+            self.log.info('username:   ' + str(username))
+            self.log.info('attributes: ' + str(attributes))
+
+        self.get_current_user()
+        self.log.info('self.current_user: ' + str(self.current_user))
+
+        if self.current_user:
+            return self.write({'message': True})
+        else:
+            return self.write({'message': False})
 
 
 class LoginHandler(BaseHandler, CasClientMixin, RequestHandler):
@@ -3487,6 +3527,7 @@ def make_app():
             tornado.web.StaticFileHandler, {'path': favicon_path}),
         url(r"/acls/.*", AclHandler),
         url(r"/acls", AclHandler),
+        url(r'/ticketcheck/?', LoginCheckHandler),
         url(r'/login/?', LoginHandler),
         url(r'/logout/?', LogoutHandler),
         url(r"/", RootHandler),
