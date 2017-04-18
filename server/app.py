@@ -123,6 +123,8 @@ class BaseHandler(tornado.web.RequestHandler):
     Override of Tornado get_current_user
     """
     def get_current_user(self):
+
+        # Initialize variables
         self.username = None
         self.userid = -1
         self.usergroupids = []
@@ -130,17 +132,15 @@ class BaseHandler(tornado.web.RequestHandler):
         self.log = logging.getLogger("h5serv")
         self.log.info('BaseHandler.get_current_user')
 
+        # Look at page header information - a 'Cookie' might be in there
+        # somewhere
         self.log.info("header keys...")
         for k in self.request.headers.keys():
             self.log.info("header[" + k + "]: " + self.request.headers[k])
         self.log.info('remote_ip: ' + self.request.remote_ip)
 
-        # attributes = self.get_secure_cookie('cas_attributes')
-        attributes = self.get_secure_cookie('TGC')
-        # attributes = self.get_secure_cookie('JSESSIONID')
-        # attributes = self.get_secure_cookie('userName')
-        # attributes = self.get_secure_cookie('userSucker')
-        # attributes = self.get_cookie('userSucker')
+        # See if there is a specific cookie with CAS information in it
+        attributes = self.get_secure_cookie('cas_attributes')
         if attributes:
             attributes = json.loads(attributes)
         self.log.info(attributes)
@@ -151,17 +151,15 @@ class BaseHandler(tornado.web.RequestHandler):
             self.username = attributes['userName']
             self.log.info('self.username: ' + str(self.username))
 
-            # Get user id number - quick fix, Should really get this from CAS,
-            # but that item is not available at this time
+            # Get user id number from the server machine - quick fix, should
+            # really get this from CAS, but that item is not available at this
+            # time
             self.userid = getpwnam(self.username).pw_uid
             self.log.info('self.userid: ' + str(self.userid))
 
-            # Get the groups - also a quick fix
-            # The group id numbers for all groups for this user
+            # Get the groups for this user - also a quick fix
             self.usergroupids = [g.gr_gid for g in getgrall() if self.username
                                  in g.gr_mem]
-
-            # Get the group id number for the user name
             gid = getpwnam(self.username).pw_gid
             self.usergroupids.append(getgrgid(gid).gr_gid)
 
@@ -3367,22 +3365,47 @@ class CasClientMixin(object):
             page.close()
 
 
-class LoginCheckHandler(BaseHandler, CasClientMixin, RequestHandler):
+class CookieCheckHandler(BaseHandler):
 
     def get(self):
 
         self.log = logging.getLogger("h5serv")
-        self.log.info('LoginHandler:get() called')
+        self.log.info('CookieCheckHandler:get() called')
 
+        # Read the cookie, save user information
+        self.get_current_user()
+        self.log.info('self.current_user: ' + str(self.current_user))
+
+        if self.current_user:
+            return self.write({'message': True})
+        else:
+            return self.write({'message': False})
+
+
+class TicketCheckHandler(BaseHandler, CasClientMixin, RequestHandler):
+
+    def get(self):
+
+        self.log = logging.getLogger("h5serv")
+        self.log.info('TicketCheckHandler:get() called')
+
+        # Check for a ticket in the url
         ticket = self.get_argument('ticket', None)
         self.log.info('ticket: ' + str(ticket))
 
         if ticket:
+
+            # Verify the ticket with the CAS server
             username, attributes = self.verify_cas(ticket, self.service_url)
 
             self.log.info('username:   ' + str(username))
             self.log.info('attributes: ' + str(attributes))
 
+            # Save the information to a cookie
+            self.log.info('creating cookie')
+            self.set_secure_cookie('cas_attributes', json.dumps(attributes))
+
+        # Read the cookie, save user information
         self.get_current_user()
         self.log.info('self.current_user: ' + str(self.current_user))
 
@@ -3429,11 +3452,16 @@ class LogoutHandler(CasClientMixin, BaseHandler):
         self.log.info('LogoutHandler:get() called')
         self.log.info('self.current_user: ' + str(self.current_user))
 
-        if not self.current_user:
-            return self.redirect(self.get_next_url())
-        else:
-            self.clear_cookie('cas_attributes')
-            return self.redirect(self.get_logout_url('/logout'))
+        # Clear the CAS cookie
+        self.clear_cookie('cas_attributes')
+
+        return self.write({'message': 'logout success?'})
+
+        # if not self.current_user:
+        #     return self.redirect(self.get_next_url())
+        # else:
+        #     self.clear_cookie('cas_attributes')
+        #     return self.redirect(self.get_logout_url('/logout'))
 
 
 def sig_handler(sig, frame):
@@ -3527,7 +3555,8 @@ def make_app():
             tornado.web.StaticFileHandler, {'path': favicon_path}),
         url(r"/acls/.*", AclHandler),
         url(r"/acls", AclHandler),
-        url(r'/ticketcheck/?', LoginCheckHandler),
+        url(r'/cookiecheck', CookieCheckHandler),
+        url(r'/ticketcheck/?', TicketCheckHandler),
         url(r'/login/?', LoginHandler),
         url(r'/logout/?', LogoutHandler),
         url(r"/", RootHandler),
