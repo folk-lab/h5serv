@@ -13,7 +13,6 @@
 import hdf5plugin
 import largeImages
 import permissions
-import requests
 from pwd import getpwnam
 from grp import getgrall, getgrgid
 import stat
@@ -128,6 +127,7 @@ class BaseHandler(tornado.web.RequestHandler):
         self.username = None
         self.userid = -1
         self.usergroupids = []
+        self.userattributes = None
 
         self.log = logging.getLogger("h5serv")
         self.log.info('BaseHandler.get_current_user')
@@ -145,6 +145,7 @@ class BaseHandler(tornado.web.RequestHandler):
             attributes = json.loads(attributes)
         self.log.info(attributes)
         self.log.info(bool(attributes))
+        self.userattributes = attributes
 
         if attributes:
 
@@ -3374,10 +3375,13 @@ class CookieCheckHandler(BaseHandler):
 
         # Read the cookie, save user information
         self.get_current_user()
-        self.log.info('self.current_user: ' + str(self.current_user))
+        self.log.info('self.username: ' + str(self.username))
 
-        if self.current_user:
-            return self.write({'message': True})
+        if self.username:
+            # return self.write({'message': True})
+            # return self.write({'message': True, 'username': self.username})
+            return self.write({'message': True, 'attributes':
+                              self.userattributes})
         else:
             return self.write({'message': False})
 
@@ -3405,11 +3409,17 @@ class TicketCheckHandler(BaseHandler, CasClientMixin, RequestHandler):
             self.log.info('creating cookie')
             self.set_secure_cookie('cas_attributes', json.dumps(attributes))
 
-        # Read the cookie, save user information
-        self.get_current_user()
-        self.log.info('self.current_user: ' + str(self.current_user))
+            # Save to global variables
+            self.username = username
 
-        if self.current_user:
+        else:
+            self.username = None
+
+        # # Read the cookie, save user information
+        # self.get_current_user()
+        # self.log.info('self.username: ' + str(self.username))
+
+        if self.username:
             return self.write({'message': True})
         else:
             return self.write({'message': False})
@@ -3422,9 +3432,9 @@ class LoginHandler(BaseHandler, CasClientMixin, RequestHandler):
         self.log.info('LoginHandler:get() called')
 
         self.get_current_user()
-        self.log.info('self.current_user: ' + str(self.current_user))
+        self.log.info('self.username: ' + str(self.username))
 
-        if self.current_user:
+        if self.username:
             return self.write({'message': 'login success'})
 
         ticket = self.get_argument('ticket', None)
@@ -3450,18 +3460,22 @@ class LogoutHandler(CasClientMixin, BaseHandler):
     def get(self):
         self.log = logging.getLogger("h5serv")
         self.log.info('LogoutHandler:get() called')
-        self.log.info('self.current_user: ' + str(self.current_user))
 
         # Clear the CAS cookie
         self.clear_cookie('cas_attributes')
 
-        return self.write({'message': 'logout success?'})
+        # Read the cookie, hopefully no longer there
+        # self.get_current_user()
+        # self.log.info('self.username: ' + str(self.username))
+        self.username = None
+        self.userid = -1
+        self.usergroupids = []
+        self.log.info('self.username: ' + str(self.username))
 
-        # if not self.current_user:
-        #     return self.redirect(self.get_next_url())
-        # else:
-        #     self.clear_cookie('cas_attributes')
-        #     return self.redirect(self.get_logout_url('/logout'))
+        if self.username:
+            return self.write({'message': True})
+        else:
+            return self.write({'message': False})
 
 
 def sig_handler(sig, frame):
@@ -3558,7 +3572,7 @@ def make_app():
         url(r'/cookiecheck', CookieCheckHandler),
         url(r'/ticketcheck/?', TicketCheckHandler),
         url(r'/login/?', LoginHandler),
-        url(r'/logout/?', LogoutHandler),
+        url(r'/logout', LogoutHandler),
         url(r"/", RootHandler),
         url(r".*", DefaultHandler),
     ],  **settings)
