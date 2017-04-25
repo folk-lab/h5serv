@@ -3314,25 +3314,22 @@ class CasClientMixin(object):
 
         return url
 
-    def verify_cas(self, ticket, service):
+    def verify_cas_ticket(self, ticket):
         """
         Verifies CAS 3.0+ XML-based authentication ticket and returns extended
         attributes.  Returns username on success and None on failure.
         """
 
         self.log = logging.getLogger("h5serv")
-        self.log.info('CasClientMixin.verify_cas() called')
+        self.log.info('CasClientMixin.verify_cas_ticket() called')
 
         try:
             from xml.etree import ElementTree
         except ImportError:
             from elementtree import ElementTree
 
-        self.log.info('service: ' + str(service))
-        # params = {'ticket': ticket, 'service': service}
         params = {'ticket': ticket, 'service':
                   'https://w-jasbru-pc-0.maxiv.lu.se/hdf5-web-gui/html/'}
-        #           'https://w-jasbru-pc-0:6050/login'}
         self.log.info('params: ' + str(params))
         url = '%s/p3/serviceValidate?%s' % (self.cas_server_url,
                                             urllib.urlencode(params))
@@ -3366,22 +3363,24 @@ class CasClientMixin(object):
             page.close()
 
 
-class CookieCheckHandler(BaseHandler):
+class CookieCheckHandler(BaseHandler, CasClientMixin, RequestHandler):
 
     def get(self):
 
         self.log = logging.getLogger("h5serv")
         self.log.info('CookieCheckHandler:get() called')
 
+        # # Verify the ticket with the CAS server
+        # username, attributes = self.verify_cas_login()
+        # self.log.info('username:   ' + str(username))
+
         # Read the cookie, save user information
         self.get_current_user()
         self.log.info('self.username: ' + str(self.username))
 
         if self.username:
-            # return self.write({'message': True})
-            # return self.write({'message': True, 'username': self.username})
-            return self.write({'message': True, 'attributes':
-                              self.userattributes})
+            return self.write({'message': True, 'displayName':
+                              self.userattributes['displayName']})
         else:
             return self.write({'message': False})
 
@@ -3400,7 +3399,7 @@ class TicketCheckHandler(BaseHandler, CasClientMixin, RequestHandler):
         if ticket:
 
             # Verify the ticket with the CAS server
-            username, attributes = self.verify_cas(ticket, self.service_url)
+            username, attributes = self.verify_cas_ticket(ticket)
 
             self.log.info('username:   ' + str(username))
             self.log.info('attributes: ' + str(attributes))
@@ -3441,7 +3440,7 @@ class LoginHandler(BaseHandler, CasClientMixin, RequestHandler):
         self.log.info('ticket: ' + str(ticket))
 
         if ticket:
-            username, attributes = self.verify_cas(ticket, self.service_url)
+            username, attributes = self.verify_cas_ticket(ticket)
 
             self.log.info('username:   ' + str(username))
             self.log.info('attributes: ' + str(attributes))
