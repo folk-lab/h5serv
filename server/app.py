@@ -3410,6 +3410,7 @@ class TicketCheckHandler(BaseHandler, CasClientMixin, RequestHandler):
 
             # Save to global variables
             self.username = username
+            self.userattributes = attributes
 
         else:
             self.username = None
@@ -3419,7 +3420,9 @@ class TicketCheckHandler(BaseHandler, CasClientMixin, RequestHandler):
         # self.log.info('self.username: ' + str(self.username))
 
         if self.username:
-            return self.write({'message': True})
+            # return self.write({'message': True})
+            return self.write({'message': True, 'displayName':
+                              self.userattributes['displayName']})
         else:
             return self.write({'message': False})
 
