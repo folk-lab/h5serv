@@ -3329,7 +3329,8 @@ class CasClientMixin(object):
             from elementtree import ElementTree
 
         params = {'ticket': ticket, 'service':
-                  'https://w-jasbru-pc-0.maxiv.lu.se/hdf5-web-gui/html/'}
+                  'https://w-jasbru-pc-0.maxiv.lu.se/hdf5-web-gui/html/' +
+                  'app.html'}
         self.log.info('params: ' + str(params))
         url = '%s/p3/serviceValidate?%s' % (self.cas_server_url,
                                             urllib.urlencode(params))
