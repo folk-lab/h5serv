@@ -17,8 +17,10 @@ cfg = {
     'debug':  True,
     'datapath': '../data/',
     'public_dir': ['example-subfolder'],
+
     # 'domain':  'scilab.maxiv.lu.se',
     'domain':  'w-jasbru-pc-0.maxiv.lu.se',
+
     'hdf5_ext': '.h5',
     'toc_name': '.toc.h5',
     'home_dir': 'home',
@@ -43,6 +45,7 @@ cfg = {
     'log_file': r'../log/h5serv.log',
     'log_level': 'DEBUG',  # ERROR, WARNING, INFO, DEBUG, or NOTSET,
 
+    # 'cas_service': 'https://scilab.maxiv.lu.se/hdf5-web-gui/html/' + \
     'cas_service': 'https://w-jasbru-pc-0.maxiv.lu.se/hdf5-web-gui/html/' + \
                    'app.html',
 
