@@ -3328,9 +3328,10 @@ class CasClientMixin(object):
         except ImportError:
             from elementtree import ElementTree
 
-        params = {'ticket': ticket, 'service':
-                  'https://w-jasbru-pc-0.maxiv.lu.se/hdf5-web-gui/html/' +
-                  'app.html'}
+        cas_service = config.get('cas_service')
+        self.log.info('cas_service: ' + str(cas_service))
+
+        params = {'ticket': ticket, 'service': cas_service}
         self.log.info('params: ' + str(params))
         url = '%s/p3/serviceValidate?%s' % (self.cas_server_url,
                                             urllib.urlencode(params))
