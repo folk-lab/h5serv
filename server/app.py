@@ -3372,17 +3372,23 @@ class CookieCheckHandler(BaseHandler, CasClientMixin, RequestHandler):
         self.log = logging.getLogger("h5serv")
         self.log.info('CookieCheckHandler:get() called')
 
-        # # Verify the ticket with the CAS server
-        # username, attributes = self.verify_cas_login()
-        # self.log.info('username:   ' + str(username))
-
         # Read the cookie, save user information
         self.get_current_user()
         self.log.info('self.username: ' + str(self.username))
 
+        # Check for a first name in the attributes
+        firstname = str(None)
+        if 'displayName' in self.userattributes:
+            firstname = str(self.userattributes['displayName'])
+        elif 'firstName' in self.userattributes:
+            firstname = str(self.userattributes['firstName'])
+        else:
+            firstname = self.username
+
+        self.log.info('firstName:  ' + firstname)
+
         if self.username:
-            return self.write({'message': True, 'displayName':
-                              self.userattributes['displayName']})
+            return self.write({'message': True, 'firstName': firstname})
         else:
             return self.write({'message': False})
 
@@ -3398,34 +3404,45 @@ class TicketCheckHandler(BaseHandler, CasClientMixin, RequestHandler):
         ticket = self.get_argument('ticket', None)
         self.log.info('ticket: ' + str(ticket))
 
+        firstname = str(None)
+
         if ticket:
 
             # Verify the ticket with the CAS server
             username, attributes = self.verify_cas_ticket(ticket)
 
-            self.log.info('username:   ' + str(username))
-            self.log.info('attributes: ' + str(attributes))
+            # Save to global variables
+            self.username = str(username)
+            self.log.info('username:   ' + str(self.username))
+            self.userattributes = attributes
+            self.log.info('attributes: ' + str(self.userattributes))
+
+            # Check for a first name in the attributes
+            if 'displayName' in self.userattributes:
+                firstname = str(self.userattributes['displayName'])
+            elif 'firstName' in self.userattributes:
+                firstname = str(self.userattributes['firstName'])
+            else:
+                firstname = self.username
+
+            self.log.info('firstName:  ' + firstname)
 
             # Save the information to a cookie
             self.log.info('creating cookie')
-            self.set_secure_cookie('cas_attributes', json.dumps(attributes))
-
-            # Save to global variables
-            self.username = username
-            self.userattributes = attributes
+            self.set_secure_cookie('cas_attributes',
+                                   json.dumps(self.userattributes))
 
         else:
             self.username = None
+            firstname = str(None)
 
-        # # Read the cookie, save user information
-        # self.get_current_user()
-        # self.log.info('self.username: ' + str(self.username))
-
-        if self.username:
-            # return self.write({'message': True})
-            return self.write({'message': True, 'displayName':
-                              self.userattributes['displayName']})
+        # Return information to the web application
+        if str(self.username):
+            self.log.info('message: ' + str(True))
+            self.log.info('firstName:   ' + firstname)
+            return self.write({'message': True, 'firstName': firstname})
         else:
+            self.log.info('message: ' + str(False))
             return self.write({'message': False})
 
 
