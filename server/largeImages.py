@@ -253,7 +253,8 @@ def get_image_mask(master_file_path, slices, debug):
     return image_mask
 
 
-def decimate_if_necessary(values, slices, file_path, output_list, debug):
+def decimate_if_necessary(values, slices, image_size_limit, file_path,
+                          output_list, debug):
 
     if debug:
         print '  type: ' + str(type(values))
@@ -285,8 +286,8 @@ def decimate_if_necessary(values, slices, file_path, output_list, debug):
     # pixels seems good, closer to 1e5 seems to result in best results in the
     # web browser
     if is_big_image:
-        image_out = decimate_image(image_out, 2e5, data_type, value_dimensions,
-                                   debug)
+        image_out = decimate_image(image_out, image_size_limit, data_type,
+                                   value_dimensions, debug)
 
     # Convert a numpy.ndarray to a list, which is what h5serv expects
     if output_list and isinstance(image_out, numpy.ndarray):
@@ -373,8 +374,8 @@ def main(argv):
     else:
         image_out = image_org
 
-    image_final = decimate_if_necessary(image_org, slices, args.input_file[0],
-                                        False, args.debug)
+    image_final = decimate_if_necessary(image_org, slices, 1e5,
+                                        args.input_file[0], False, args.debug)
 
     if args.debug:
         print ' image_org size: ', image_org.shape
