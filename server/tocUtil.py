@@ -11,7 +11,7 @@
 ##############################################################################
 import os
 import os.path as op
-import re
+# import re
 from tornado.web import HTTPError
 import logging
 
@@ -29,12 +29,14 @@ from h5json import Hdf5db
 def getTocFilePath(user=None):
     datapath = config.get('datapath')
     if user is None:
-        #print("get default toc")
+        # print("get default toc")
         toc_file_path = fileUtil.join(datapath, config.get('toc_name'))
     else:
-        #print("get user toc")
-        toc_file_path = fileUtil.join(datapath, config.get('home_dir'))
-        toc_file_path = fileUtil.join(toc_file_path, config.get('toc_name'))
+        # print("get user toc")
+        # toc_file_path = fileUtil.join(datapath, config.get('home_dir'))
+        # toc_file_path = fileUtil.join(toc_file_path, config.get('toc_name'))
+
+        toc_file_path = fileUtil.join(datapath, config.get('toc_name'))
 
     return toc_file_path
 
@@ -49,12 +51,13 @@ def isTocFilePath(filePath):
     return isTocFilePath
 
 
-
 """
 helper - get group uuid of hardlink, or None if no link
 """
+
+
 def getSubgroupId(db, group_uuid, link_name):
-    #print("link_name:", link_name)
+    # print("link_name:", link_name)
     subgroup_uuid = None
     try:
         item = db.getLinkItemByUuid(group_uuid, link_name)
@@ -69,14 +72,17 @@ def getSubgroupId(db, group_uuid, link_name):
 
     return subgroup_uuid
 
+
 """
 Update toc with new filename
 """
+
+
 def addTocEntry(domain, filePath,  userid=None):
     """
     Helper method - update TOC when a domain is created
-    If userid is provide, the acl will be checked to ensure userid has permissions
-    to modify the object.
+    If userid is provide, the acl will be checked to ensure userid has
+    permissions to modify the object.
     """
     log = logging.getLogger("h5serv")
     hdf5_ext = config.get('hdf5_ext')
@@ -103,9 +109,11 @@ def addTocEntry(domain, filePath,  userid=None):
                     if userid is not None:
                         acl = db.getAcl(group_uuid, userid)
                         if not acl['create']:
-                            self.log.info("unauthorized access to group:" + group_uuid)
+                            self.log.info("unauthorized access to group:" +
+                                          group_uuid)
                             raise IOError(errno.EACCES)  # unauthorized
-                    log.info("createExternalLink -- uuid %s, domain: %s, linkName: %s", group_uuid, domain, linkName)
+                    log.info("createExternalLink -- uuid %s, domain: %s, " +
+                             "linkName: %s", group_uuid, domain, linkName)
                     db.createExternalLink(group_uuid, domain, '/', linkName)
                 else:
                     subgroup_uuid = getSubgroupId(db, group_uuid, linkName)
@@ -113,12 +121,15 @@ def addTocEntry(domain, filePath,  userid=None):
                         if userid is not None:
                             acl = db.getAcl(group_uuid, userid)
                             if not acl['create']:
-                                self.log.info("unauthorized access to group:" + group_uuid)
+                                self.log.info("unauthorized access to group:" +
+                                              group_uuid)
                                 raise IOError(errno.EACCES)  # unauthorized
                         # create subgroup and link to parent group
                         subgroup_uuid = db.createGroup()
                         # link the new group
-                        log.info("linkObject -- uuid: %s, subgroup_uuid: %s, linkName: %s", group_uuid, subgroup_uuid, linkName)
+                        log.info("linkObject -- uuid: %s, subgroup_uuid: %s," +
+                                 " linkName: %s", group_uuid, subgroup_uuid,
+                                 linkName)
                         db.linkObject(group_uuid, subgroup_uuid, linkName)
                     group_uuid = subgroup_uuid
 
@@ -126,9 +137,12 @@ def addTocEntry(domain, filePath,  userid=None):
         log.info("IOError: " + str(e.errno) + " " + e.strerror)
         raise e
 
+
 """
 Helper method - update TOC when a domain is deleted
 """
+
+
 def removeTocEntry(domain, filePath, userid=None):
     log = logging.getLogger("h5serv")
     hdf5_ext = config.get('hdf5_ext')
@@ -139,7 +153,8 @@ def removeTocEntry(domain, filePath, userid=None):
         raise HTTPError(500)
     filePath = fileUtil.getUserFilePath(filePath)
     tocFile = fileUtil.getTocFilePathForDomain(domain)
-    log.info("removeTocEntry - domain: " + domain + " filePath: " + filePath + " tocfile: " + tocFile)
+    log.info("removeTocEntry - domain: " + domain + " filePath: " + filePath +
+             " tocfile: " + tocFile)
     pathNames = filePath.split('/')
     log.info("pathNames: " + str(pathNames))
 
@@ -168,9 +183,12 @@ def removeTocEntry(domain, filePath, userid=None):
         log.info("IOError: " + str(e.errno) + " " + e.strerror)
         raise e
 
+
 """
 Create a populate TOC file if not present
 """
+
+
 def createTocFile(datapath):
     log = logging.getLogger("h5serv")
     log.info("createTocFile(" + datapath + ")")
@@ -179,10 +197,10 @@ def createTocFile(datapath):
     log.info("home dir: " + home_dir)
     if datapath.startswith(home_dir):
         log.info("user toc")
-        user_toc = True
+        # user_toc = True
     else:
         log.info("system toc")
-        user_toc = False
+        # user_toc = False
 
     if datapath.endswith(config.get('toc_name')):
         toc_dir = fileUtil.posixpath(op.normpath(op.dirname(datapath)))
@@ -190,7 +208,6 @@ def createTocFile(datapath):
     else:
         toc_dir = fileUtil.posixpath(op.normpath(datapath))
         toc_file = fileUtil.join(toc_dir, config.get("toc_name"))
-
 
     log.info("toc_dir:[" + toc_dir + "]")
     log.info("data_dir:[" + data_dir + "]")
@@ -204,8 +221,9 @@ def createTocFile(datapath):
     base_domain = fileUtil.getDomain(toc_dir)
     log.info("base domain: " + base_domain)
 
-    #if os.name == 'nt':
-    #    toc_dir = toc_dir.replace('\\', '/')  # use unix style to map to HDF5 convention
+    # if os.name == 'nt':
+    #    # use unix style to map to HDF5 convention
+    #    toc_dir = toc_dir.replace('\\', '/')
 
     hdf5_ext = config.get('hdf5_ext')
 
@@ -213,7 +231,7 @@ def createTocFile(datapath):
 
     for root, subdirs, files in os.walk(toc_dir):
         root = fileUtil.posixpath(root)
-        log.info( "toc walk: " + root)
+        log.info("toc walk: " + root)
 
         if toc_dir == data_dir:
             log.info(fileUtil.join(toc_dir, home_dir))
@@ -250,11 +268,13 @@ def createTocFile(datapath):
 
             if op.islink(filepath):
                 log.info("symlink: " + filepath)
-                # todo - quick hack for now to set a symlink with to sub-folder of data dir
-                # todo - revamp to use os.readlink and do the proper thing with the link value
+                # todo - quick hack for now to set a symlink with to sub-folder
+                # of data dir todo - revamp to use os.readlink and do the
+                # proper thing with the link value
                 filedomain = config.get('domain')
                 link_target += filename
-                log.info("setting symbolic link domainpath to: " + filedomain + " target: /" + filename)
+                log.info("setting symbolic link domainpath to: " + filedomain
+                         + " target: /" + filename)
             else:
                 if len(filename) < 4 or filename[-3:] != hdf5_ext:
                     log.info("skip non-hdf5 extension")
@@ -263,7 +283,8 @@ def createTocFile(datapath):
                     log.info("skip non-hdf5 file")
                     continue
                 filename = filename[:-(len(hdf5_ext))]
-                # replace any dots with '%2E' to disambiguate from domain seperators
+                # replace any dots with '%2E' to disambiguate from domain
+                # seperators
                 filename_encoded = filename.replace('.', '%2E')
                 log.info("filename (noext): " + filename)
                 if domainpath[0] == '.':
@@ -284,4 +305,5 @@ def createTocFile(datapath):
                 log.info("tocFile - ExternalLink: " + domainpath)
                 grp[filename] = h5py.ExternalLink(filedomain, link_target)
             except HTTPError:
-                log.info("file path: [" + filepath + "] is not valid dns name, ignoring")
+                log.info("file path: [" + filepath +
+                         "] is not valid dns name, ignoring")

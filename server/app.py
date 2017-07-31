@@ -12,6 +12,10 @@
 
 import hdf5plugin
 import largeImages
+import permissions
+from pwd import getpwnam
+from grp import getgrall, getgrgid
+import stat
 import numpy
 import time
 import signal
@@ -23,7 +27,7 @@ import tornado.httpserver
 import sys
 import ssl
 import base64
-import binascii
+# import binascii
 from tornado.ioloop import IOLoop
 from tornado.web import RequestHandler, Application, url, HTTPError
 from tornado.escape import json_encode, json_decode, url_escape, url_unescape
@@ -36,6 +40,8 @@ import tocUtil
 from httpErrorUtil import errNoToHttpStatus
 from h5watchdog import h5observe
 from passwordUtil import getAuthClient
+import urllib
+import json
 import six
 if six.PY3:
     unicode = str
@@ -98,8 +104,11 @@ class BaseHandler(tornado.web.RequestHandler):
     """
     def set_default_headers(self):
         cors_domain = config.get('cors_domain')
+        self.log = logging.getLogger("h5serv")
+        self.log.info('cors_domain: ' + str(cors_domain))
         if cors_domain:
             self.set_header('Access-Control-Allow-Origin', cors_domain)
+            self.set_header('Access-Control-Allow-Credentials', 'true')
 
     """
     Set allows heards per CORS policy
@@ -113,30 +122,87 @@ class BaseHandler(tornado.web.RequestHandler):
     Override of Tornado get_current_user
     """
     def get_current_user(self):
-        user = None
-        pswd = None
-        scheme, _, token = auth_header = self.request.headers.get(
-            'Authorization', '').partition(' ')
-        if scheme and token and scheme.lower() == 'basic':
-            try:
-                if six.PY3:
-                    token_decoded = base64.decodebytes(to_bytes(token))
-                else:
-                    token_decoded = base64.decodestring(token)
-            except binascii.Error:
-                raise HTTPError(400, "Malformed authorization header")
-            if token_decoded.index(b':') < 0:
-                raise HTTPError(400, "Malformed authorization header")
-            user, _, pswd = token_decoded.partition(b':')
-        if user and pswd:
-            # throws exception if passwd is not valid
-            self.username = user
-            self.userid = auth.validateUserPassword(user, pswd)
-            return self.userid
-        else:
-            self.username = None
-            self.userid = -1
-            return None
+
+        # Initialize variables
+        self.username = None
+        self.userid = -1
+        self.usergroupids = []
+        self.userattributes = None
+
+        self.log = logging.getLogger("h5serv")
+        self.log.info('BaseHandler.get_current_user')
+
+        # Look at page header information - a 'Cookie' might be in there
+        # somewhere
+        self.log.info("header keys...")
+        for k in self.request.headers.keys():
+            self.log.info("header[" + k + "]: " + self.request.headers[k])
+        self.log.info('remote_ip: ' + self.request.remote_ip)
+
+        # See if there is a specific cookie with CAS information in it
+        attributes = self.get_secure_cookie('cas_attributes')
+        if attributes:
+            attributes = json.loads(attributes)
+        self.log.info(attributes)
+        self.log.info(bool(attributes))
+        self.userattributes = attributes
+
+        if attributes:
+
+            self.username = attributes['userName']
+            self.log.info('self.username: ' + str(self.username))
+
+            # Get user id number from the server machine - quick fix, should
+            # really get this from CAS, but that item is not available at this
+            # time
+            self.userid = getpwnam(self.username).pw_uid
+            self.log.info('self.userid: ' + str(self.userid))
+
+            # Get the groups for this user - also a quick fix
+            self.usergroupids = [g.gr_gid for g in getgrall() if self.username
+                                 in g.gr_mem]
+            gid = getpwnam(self.username).pw_gid
+            self.usergroupids.append(getgrgid(gid).gr_gid)
+
+            self.log.info('gid: ' + str(gid))
+            self.log.info('self.usergroupids: ' + str(self.usergroupids))
+
+            for key, value in attributes.iteritems():
+                self.log.info('attributes[' + str(key) + ']: ' +
+                              str(value))
+
+            return True
+
+        self.log.info('no logged in user')
+
+        return None
+
+    # def get_current_user(self):
+    #     user = None
+    #     pswd = None
+    #     # scheme, _, token = auth_header = self.request.headers.get(
+    #     scheme, _, token = self.request.headers.get(
+    #         'Authorization', '').partition(' ')
+    #     if scheme and token and scheme.lower() == 'basic':
+    #         try:
+    #             if six.PY3:
+    #                 token_decoded = base64.decodebytes(to_bytes(token))
+    #             else:
+    #                 token_decoded = base64.decodestring(token)
+    #         except binascii.Error:
+    #             raise HTTPError(400, "Malformed authorization header")
+    #         if token_decoded.index(b':') < 0:
+    #             raise HTTPError(400, "Malformed authorization header")
+    #         user, _, pswd = token_decoded.partition(b':')
+    #     if user and pswd:
+    #         # throws exception if passwd is not valid
+    #         self.username = user
+    #         self.userid = auth.validateUserPassword(user, pswd)
+    #         return self.userid
+    #     else:
+    #         self.username = None
+    #         self.userid = -1
+    #         return None
 
     def verifyAcl(self, acl, action):
         """Verify ACL for given action. Raise exception if not
@@ -150,8 +216,8 @@ class BaseHandler(tornado.web.RequestHandler):
             self.set_header('WWW-Authenticate', 'basic realm="h5serv"')
             raise HTTPError(401, "Unauthorized")
             # raise HTTPError(401, message="provide  password")
-        # validated user, but doesn't have access
 
+        # validated user, but doesn't have access
         self.log.info("unauthorized access for userid: " + str(self.userid))
         raise HTTPError(403, "Access is not permitted")
 
@@ -171,8 +237,6 @@ class BaseHandler(tornado.web.RequestHandler):
         if "X-Forwarded-Host" in self.request.headers:
             host = self.request.headers["X-Forwarded-Host"]
 
-        # domain_encoded = self.get_argument("host")
-        # print("domain_encoded: ", domain_encoded)
         self.domain = self.get_query_argument("host", default=None)
 
         if not self.domain:
@@ -183,8 +247,23 @@ class BaseHandler(tornado.web.RequestHandler):
 
         # sets self.userid, self.username
         self.get_current_user()
-        self.reqUuid = self.getRequestId()
         self.filePath = self.getFilePath(self.domain, checkExists)
+        self.log.info("self.filePath: " + self.filePath)
+
+        self.reqUuid = self.getRequestId()
+        self.log.info("self.reqUuid: " + str(self.reqUuid))
+        # if self.reqUuid is None and self.filePath is not None:
+        #     with Hdf5db(self.filePath, app_logger=self.log) as db:
+        #         self.reqUuid = db.getUUIDByPath(self.filePath)
+        # # if self.reqUuid is not None:
+        # #     with Hdf5db(self.filePath, app_logger=self.log) as db:
+        # #         db.getPathByUUID(self.reqUuid)
+
+        # get file permisssions and ownership, set ACL
+        if self.reqUuid is not None:
+            can_user_read_file = self.can_user_read_file(self.filePath)
+            self.log.info('can_user_read_file: ' + str(can_user_read_file))
+            self.set_file_ACL(can_user_read_file)
 
         self.href = protocol + '://' + host
         self.log.info("baseHandler, href: " + self.href)
@@ -194,6 +273,83 @@ class BaseHandler(tornado.web.RequestHandler):
             msg += ", username: " + to_str(self.username)
         msg += "}"
         self.log.info(msg)
+
+    '''
+    Look at the ownership and permissions of a file and determine if the logged
+    in user has read access or not - ignore write access for now.
+    '''
+    def can_user_read_file(self, filepath):
+
+        self.log.info("actual file?: " + filepath)
+
+        readable_as_owner = False
+        readable_by_group = False
+        readable_by_other = False
+
+        # Ignore the table of contents file
+        if filepath.endswith(config.get('toc_name')):
+            return False
+
+        # Ignore dot files - per file table of contents files
+
+        # Get the owner and group ids, mode, and a bunch of other information
+        # about the file
+        (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime) = \
+            os.stat(filepath)
+
+        # Check if this is a file or directory
+        self.log.info('stat.S_ISDIR(mode): ' + str(stat.S_ISDIR(mode)))
+        self.log.info('stat.S_ISREG(mode): ' + str(stat.S_ISREG(mode)))
+        self.log.info('stat.S_ISLNK(mode): ' + str(stat.S_ISLNK(mode)))
+
+        # Check if the user is the owner and has read permissions
+        if uid == self.userid:
+            user_readable = bool(mode & stat.S_IRUSR)
+            if user_readable:
+                readable_as_owner = True
+
+        # Check if the user is in the right group and has read permissions
+        if gid in self.usergroupids:
+            group_readable = bool(mode & stat.S_IRGRP)
+            if group_readable:
+                readable_by_group = True
+
+        # Check if this file is readable by others
+        readable_by_other = bool(mode & stat.S_IROTH)
+
+        self.log.info('readable_as_owner: ' + str(readable_as_owner))
+        self.log.info('readable_by_group: ' + str(readable_by_group))
+        self.log.info('readable_by_other: ' + str(readable_by_other))
+
+        if readable_as_owner or readable_by_group or readable_by_other:
+            return True
+        else:
+            return False
+
+    def set_file_ACL(self, can_user_read_file):
+
+        self.log.info('set_file_ACL(' + str(can_user_read_file) + ')')
+        self.log.info("self.filePath: " + self.filePath)
+
+        # Ignore the table of contents file
+        if self.filePath.endswith(config.get('toc_name')):
+            return False
+
+        with Hdf5db(self.filePath, app_logger=self.log) as db:
+            acl = db.getDefaultAcl()
+            acl['userid'] = self.userid
+            fields = ('create', 'read', 'update', 'delete', 'readACL',
+                      'updateACL')
+            for field in fields:
+                if field == 'read' and can_user_read_file:
+                    acl[field] = True
+                else:
+                    acl[field] = False
+
+            self.log.info('acl: ' + str(acl))
+            self.log.info('self.reqUuid: ' + str(self.reqUuid))
+
+            db.setAcl(self.reqUuid, acl)
 
     """
     getExternal uri - return url for given domain
@@ -255,7 +411,8 @@ class BaseHandler(tornado.web.RequestHandler):
         log.info("setDeaultAcl -- userid: " + str(self.userid))
         if self.userid <= 0:
             raise HTTPError(500, "Expected userid")
-        username = auth.getUserName(self.userid)
+        # username = auth.getUserName(self.userid)
+        username = self.username
         filePath = tocUtil.getTocFilePath(username)
         try:
             fileUtil.verifyFile(filePath)
@@ -264,14 +421,19 @@ class BaseHandler(tornado.web.RequestHandler):
             return
         try:
             with Hdf5db(filePath, app_logger=self.log) as db:
-                # rootUUID = db.getUUIDByPath('/')
-                # current_user_acl = db.getAcl(rootUUID, self.userid)
                 acl = db.getDefaultAcl()
                 acl['userid'] = self.userid
                 fields = ('create', 'read', 'update', 'delete', 'readACL',
                           'updateACL')
+
                 for field in fields:
+                    # acl[field] = False
                     acl[field] = True
+
+                obj_uuid = None
+
+                self.log.info("acl: " + str(acl))
+
                 db.setAcl(obj_uuid, acl)
 
         except IOError as e:
@@ -299,13 +461,6 @@ class BaseHandler(tornado.web.RequestHandler):
         # domain name)
         filePath = self.nameDecode(filePath)
 
-        # The above seems not to work when using addresses such as:
-        #   http://w-jasbru-pc-0.maxiv.lu.se:5000/
-        # even though it works fine with:
-        #   http://w-jasbru-pc-0:5000/
-        # I suppose what follows is not a proper fix...
-        # filePath = tocFilePath
-
         if checkExists:
             while True:
                 if fileUtil.isFile(filePath):
@@ -330,6 +485,7 @@ class BaseHandler(tornado.web.RequestHandler):
                     filePath = self.nameDecode(filePath)
                 else:
                     break
+
             self.log.info("verifyFile: " + filePath)
             fileUtil.verifyFile(filePath)  # throws exception if not found
 
@@ -463,8 +619,16 @@ class LinkCollectionHandler(BaseHandler):
         rootUUID = None
         try:
             with Hdf5db(self.filePath, app_logger=self.log) as db:
+
+                self.log.info('self.filePath: ' + self.filePath)
+
                 rootUUID = db.getUUIDByPath('/')
                 current_user_acl = db.getAcl(self.reqUuid, self.userid)
+
+                self.log.info('self.reqUuid: ' + str(self.reqUuid))
+                db.getPathByUUID(self.reqUuid, 'groups')
+                self.log.info('self.userid: ' + str(self.userid))
+                self.log.info('current_user_acl: ' + str(current_user_acl))
 
                 # throws exception is unauthorized
                 self.verifyAcl(current_user_acl, 'read')
@@ -495,13 +659,28 @@ class LinkCollectionHandler(BaseHandler):
             link_item['href'] = item['href'] = self.href + '/groups/' + \
                 self.reqUuid + '/links/' + self.nameEncode(item['title']) + \
                 hostQuery
+
+            self.log.info('item: ' + str(item))
+            parent_group_uuid = self.reqUuid
+            self.log.info('parent_group_uuid: ' + str(parent_group_uuid))
+
+            # Folders
             if item['class'] == 'H5L_TYPE_HARD':
                 link_item['id'] = item['id']
                 link_item['collection'] = item['collection']
                 link_item['target'] = self.href + '/' + item['collection'] + \
                     '/' + item['id'] + hostQuery
+
+                # Check the folder permissions, check if logged in user can
+                # read the contents
+                link_item['readable'] = permissions.get_info_from_uuid(
+                    '../data/' + config.get('toc_name'), item['id'],
+                    self.username, False)
+
             elif item['class'] == 'H5L_TYPE_SOFT':
                 link_item['h5path'] = item['h5path']
+
+            # Data files
             elif item['class'] == 'H5L_TYPE_EXTERNAL':
                 link_item['h5path'] = item['h5path']
                 h5domain = self.nameEncode(item['file'])
@@ -510,7 +689,20 @@ class LinkCollectionHandler(BaseHandler):
                     link_item['target'] = self.getExternalHref(
                         h5domain, link_item['h5path'])
 
-            links.append(link_item)
+                    # Not sure if this is the best place to have this:
+                    # Check if the linked to item is readable by the logged in
+                    # user, add that information to output
+                    filepath = self.getFilePath(h5domain, True)
+                    self.log.info("filepath: " + filepath)
+                    link_item['readable'] = self.can_user_read_file(filepath)
+
+            # If the item is not readable by the logged in user, don't add it
+            # to the output
+            if 'readable' in link_item:
+                if link_item['readable']:
+                    links.append(link_item)
+            else:
+                links.append(link_item)
 
         response['links'] = links
 
@@ -1714,17 +1906,6 @@ class ValueHandler(BaseHandler):
 
                         self.log.info("response_content_type: " +
                                       response_content_type)
-                        ##################################
-                        # Jason - for some reason, on one particualr server,
-                        # I got an error:
-                        #   TypeError: getDatasetValuesByUuid() got an
-                        #       unexpected keyword argument 'format'
-                        # So, I have added the third argument, previously
-                        # it was not given - might be bad to do?
-                        ##################################
-                        # values = db.getDatasetValuesByUuid(
-                        #     self.reqUuid, tuple(slices),
-                        #     format=response_content_type)
                         values = db.getDatasetValuesByUuid(
                             self.reqUuid, tuple(slices), response_content_type)
 
@@ -1736,7 +1917,7 @@ class ValueHandler(BaseHandler):
                         self.log.info('dims: ' + str(dims))
                         self.log.info('filePath: ' + self.filePath)
                         values = largeImages.decimate_if_necessary(
-                            values, slices, self.filePath, True, True)
+                            values, slices, 8e4, self.filePath, True, True)
                         ##################################
 
                 else:
@@ -2887,11 +3068,19 @@ class RootHandler(BaseHandler):
 
         try:
             with Hdf5db(self.filePath, app_logger=self.log) as db:
+
                 rootUUID = db.getUUIDByPath('/')
+
+                self.log.info("rootUUID: " + str(rootUUID))
+                self.log.info("self.filePath: " + str(self.filePath))
+                self.log.info("self.userid: " + str(self.userid))
+
                 acl = db.getAcl(rootUUID, self.userid)
 
+                self.log.info("acl: " + str(acl))
+
         except IOError as e:
-            self.log.info("IOError: " + str(e.errno) + " " + e.strerror)
+            self.log.info("IOError: " + str(e.errno) + " " + str(e.strerror))
             status = errNoToHttpStatus(e.errno)
             raise HTTPError(status, reason=e.strerror)
 
@@ -2919,6 +3108,8 @@ class RootHandler(BaseHandler):
         return response
 
     def get(self):
+
+        self.log.info('RootHandler.get')
 
         self.baseHandler()
         """
@@ -3090,6 +3281,224 @@ class InfoHandler(RequestHandler):
             self.write(json_encode(response))
 
 
+class CasClientMixin(object):
+    @property
+    def cas_server_url(self):
+        return 'https://cas.maxiv.lu.se/cas/'
+
+    @property
+    def service_url(self):
+        return self.request.full_url()
+
+    def get_next_url(self, default='/'):
+        return self.get_argument('next', default)
+
+    def get_login_url(self):
+        params = {'service': self.service_url}
+        self.log = logging.getLogger("h5serv")
+        self.log.info('self.service_url: ' + str(self.service_url))
+        return '%s/login?%s' % (self.cas_server_url, urllib.urlencode(params))
+
+    def get_logout_url(self, next_page=None):
+        url = '%s/logout' % self.cas_server_url
+        next_page = next_page or self.get_next_url()
+        if next_page:
+            params = {
+                'url': "%s://%s%s" % (
+                    self.request.protocol, self.request.host,
+                    self.request.uri,
+                ),
+            }
+
+            url += '?' + urllib.urlencode(params)
+
+        return url
+
+    def verify_cas_ticket(self, ticket):
+        """
+        Verifies CAS 3.0+ XML-based authentication ticket and returns extended
+        attributes.  Returns username on success and None on failure.
+        """
+
+        self.log = logging.getLogger("h5serv")
+        self.log.info('CasClientMixin.verify_cas_ticket() called')
+
+        try:
+            from xml.etree import ElementTree
+        except ImportError:
+            from elementtree import ElementTree
+
+        cas_service = config.get('cas_service')
+        self.log.info('cas_service: ' + str(cas_service))
+
+        params = {'ticket': ticket, 'service': cas_service}
+        self.log.info('params: ' + str(params))
+        url = '%s/p3/serviceValidate?%s' % (self.cas_server_url,
+                                            urllib.urlencode(params))
+        page = urllib.urlopen(url)
+
+        self.log.info('url sent to CAS server: ')
+        self.log.info(url)
+
+        try:
+            user = None
+            attributes = {}
+
+            response = page.read()
+            self.log.info('response: ' + str(response))
+
+            tree = ElementTree.fromstring(response)
+            self.log.info('tree: ' + str(tree))
+
+            if tree[0].tag.endswith('authenticationSuccess'):
+                for element in tree[0]:
+                    if element.tag.endswith('user'):
+                        user = element.text
+                    elif element.tag.endswith('attributes'):
+                        for attribute in element:
+                            attributes[attribute.tag.split("}").pop()] = \
+                                attribute.text
+
+            return user, attributes
+
+        finally:
+            page.close()
+
+
+class CookieCheckHandler(BaseHandler, CasClientMixin, RequestHandler):
+
+    def get(self):
+
+        self.log = logging.getLogger("h5serv")
+        self.log.info('CookieCheckHandler:get() called')
+
+        # Read the cookie, save user information
+        self.get_current_user()
+        self.log.info('self.username: ' + str(self.username))
+
+        # Check for a first name in the attributes
+        firstname = str(None)
+        if 'displayName' in self.userattributes:
+            firstname = str(self.userattributes['displayName'])
+        elif 'firstName' in self.userattributes:
+            firstname = str(self.userattributes['firstName'])
+        else:
+            firstname = self.username
+
+        self.log.info('firstName:  ' + firstname)
+
+        if self.username:
+            return self.write({'message': True, 'firstName': firstname})
+        else:
+            return self.write({'message': False})
+
+
+class TicketCheckHandler(BaseHandler, CasClientMixin, RequestHandler):
+
+    def get(self):
+
+        self.log = logging.getLogger("h5serv")
+        self.log.info('TicketCheckHandler:get() called')
+
+        # Check for a ticket in the url
+        ticket = self.get_argument('ticket', None)
+        self.log.info('ticket: ' + str(ticket))
+
+        firstname = str(None)
+
+        if ticket:
+
+            # Verify the ticket with the CAS server
+            username, attributes = self.verify_cas_ticket(ticket)
+
+            # Save to global variables
+            self.username = str(username)
+            self.log.info('username:   ' + str(self.username))
+            self.userattributes = attributes
+            self.log.info('attributes: ' + str(self.userattributes))
+
+            # Check for a first name in the attributes
+            if 'displayName' in self.userattributes:
+                firstname = str(self.userattributes['displayName'])
+            elif 'firstName' in self.userattributes:
+                firstname = str(self.userattributes['firstName'])
+            else:
+                firstname = self.username
+
+            self.log.info('firstName:  ' + firstname)
+
+            # Save the information to a cookie
+            self.log.info('creating cookie')
+            self.set_secure_cookie('cas_attributes',
+                                   json.dumps(self.userattributes))
+
+        else:
+            self.username = None
+            firstname = str(None)
+
+        # Return information to the web application
+        if str(self.username):
+            self.log.info('message: ' + str(True))
+            self.log.info('firstName:   ' + firstname)
+            return self.write({'message': True, 'firstName': firstname})
+        else:
+            self.log.info('message: ' + str(False))
+            return self.write({'message': False})
+
+
+class LoginHandler(BaseHandler, CasClientMixin, RequestHandler):
+
+    def get(self):
+        self.log = logging.getLogger("h5serv")
+        self.log.info('LoginHandler:get() called')
+
+        self.get_current_user()
+        self.log.info('self.username: ' + str(self.username))
+
+        if self.username:
+            return self.write({'message': 'login success'})
+
+        ticket = self.get_argument('ticket', None)
+        self.log.info('ticket: ' + str(ticket))
+
+        if ticket:
+            username, attributes = self.verify_cas_ticket(ticket)
+
+            self.log.info('username:   ' + str(username))
+            self.log.info('attributes: ' + str(attributes))
+
+            self.set_secure_cookie('cas_attributes', json.dumps(attributes))
+
+            self.log.info('yes ticket, redirecting to: /')
+
+            return self.redirect('/')
+        else:
+            self.log.info('no ticket, redirecting to: ' + self.get_login_url())
+            return self.redirect(self.get_login_url())
+
+
+class LogoutHandler(CasClientMixin, BaseHandler):
+    def get(self):
+        self.log = logging.getLogger("h5serv")
+        self.log.info('LogoutHandler:get() called')
+
+        # Clear the CAS cookie
+        self.clear_cookie('cas_attributes')
+
+        # Read the cookie, hopefully no longer there
+        # self.get_current_user()
+        # self.log.info('self.username: ' + str(self.username))
+        self.username = None
+        self.userid = -1
+        self.usergroupids = []
+        self.log.info('self.username: ' + str(self.username))
+
+        if self.username:
+            return self.write({'message': True})
+        else:
+            return self.write({'message': False})
+
+
 def sig_handler(sig, frame):
     log = logging.getLogger("h5serv")
     log.warning('Caught signal: %s', sig)
@@ -3131,6 +3540,9 @@ def make_app():
             settings["debug"] = False
     else:
         settings["debug"] = config_debug
+
+    # Settings for CAS
+    settings['cookie_secret'] = 'blahblah'
 
     favicon_path = "favicon.ico"
     print("dirname path:", os.path.dirname(__file__))
@@ -3178,8 +3590,12 @@ def make_app():
             tornado.web.StaticFileHandler, {'path': favicon_path}),
         url(r"/acls/.*", AclHandler),
         url(r"/acls", AclHandler),
+        url(r'/cookiecheck', CookieCheckHandler),
+        url(r'/ticketcheck/?', TicketCheckHandler),
+        url(r'/login/?', LoginHandler),
+        url(r'/logout', LogoutHandler),
         url(r"/", RootHandler),
-        url(r".*", DefaultHandler)
+        url(r".*", DefaultHandler),
     ],  **settings)
     return app
 
