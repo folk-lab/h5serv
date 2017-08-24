@@ -110,7 +110,7 @@ def get_folder_reference(name, obj):
     Return a reference to an hdf5 object, in this case it is (hopeully) a
     folder.
     As the uuid is being used, there should be a single unique match, therefore
-    returning once it is foudn should be ok...
+    returning once it is found should be ok...
     '''
 
     for key, val in obj.attrs.iteritems():

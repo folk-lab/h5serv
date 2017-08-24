@@ -10,15 +10,29 @@
 # request a copy from help@hdfgroup.org.                                     #
 ##############################################################################
 
+# Library for certain type of compression
 import hdf5plugin
+
+# Functions for handling large images
 import largeImages
+
+# Functions for handling linux system and CAS permissions
 import permissions
 from pwd import getpwnam
 from grp import getgrall, getgrgid
+
+# Libraries for server sent events
+import signal
+from tornado import web, gen
+# from tornado.options import options
+# from tornado.httpserver import HTTPServer
+# from tornado.ioloop import IOLoop, PeriodicCallback
+from tornado.iostream import StreamClosedError
+
 import stat
 import numpy
 import time
-import signal
+# import signal
 import logging
 import logging.handlers
 import os
@@ -49,8 +63,120 @@ if six.PY3:
 else:
     from Queue import Queue
 
-
 assert hdf5plugin  # silence pyflakes
+
+
+###############################################################################
+# Testing SSE
+html = """
+<div id="messages"></div>
+<script type="text/javascript">
+    var source = new EventSource('/events');
+    source.onmessage = function(message) {
+    var div = document.getElementById("messages");
+    div.innerHTML = message.data + "<br>" + div.innerHTML;
+};
+</script>"""
+
+
+def fibonacci():
+    a, b = 0, 1
+    while True:
+        yield a
+        a, b = b, a + b
+
+
+class DataSource(object):
+    """Generic object for producing data to feed to clients."""
+    def __init__(self, initial_data=None):
+        self._data = initial_data
+
+    @property
+    def data(self):
+        return self._data
+
+    @data.setter
+    def data(self, new_data):
+        self._data = new_data
+
+
+class EventSource(web.RequestHandler):
+    """Basic handler for server-sent events."""
+
+    def initialize(self, source):
+        """The ``source`` parameter is a string that is updated with new data.
+        The :class:`EventSouce` instance will continuously check if it is
+        updated and publish to clients when it is.
+        """
+        self.source = source
+        self._last = None
+        self.source.data = None
+        self.set_header('content-type', 'text/event-stream')
+        self.set_header('cache-control', 'no-cache')
+
+        # Enable CORS
+        cors_domain = config.get('cors_domain')
+        if cors_domain:
+            self.set_header('Access-Control-Allow-Origin', cors_domain)
+            self.set_header('Access-Control-Allow-Credentials', 'true')
+            self.set_header('Access-Control-Allow-Headers', 'Content-type,')
+
+    @gen.coroutine
+    def publish(self, data):
+        """Pushes data to a listener."""
+        try:
+            self.write('data: {}\n\n'.format(data))
+            yield self.flush()
+        except StreamClosedError:
+            pass
+
+    @gen.coroutine
+    def get(self):
+        while True:
+            if self.source.data != self._last:
+                yield self.publish(self.source.data)
+                self._last = self.source.data
+            else:
+                yield gen.sleep(0.005)
+
+
+class MainHandler(web.RequestHandler):
+    # def get(self):
+    #     self.write(html)
+
+    def get(self):
+        log = logging.getLogger("h5serv")
+        log.info('MainHandler.get ' + self.request.host)
+        log.info('remote_ip: ' + self.request.remote_ip)
+
+        response = Hdf5db.getVersionInfo()
+        response['name'] = "h5serv"
+
+        accept_type = ''
+        if 'accept' in self.request.headers:
+            accept = self.request.headers['accept']
+            accept_values = accept.split(',')
+            accept_types = accept_values[0].split(';')
+            accept_type = accept_types[0]
+
+        log.info('accept_type: ' + accept_type)
+        if accept_type == 'text/html':
+            self.set_header('Content-Type', 'text/html')
+            self.write(html)
+        else:
+            self.set_header('Content-Type', 'application/json')
+            self.write(json_encode(response))
+
+
+generator = fibonacci()
+publisher = DataSource(next(generator))
+
+
+def get_next():
+    publisher.data = next(generator)
+    print(publisher.data)
+
+###############################################################################
 
 
 def to_bytes(a_string):
@@ -3284,7 +3410,9 @@ class InfoHandler(RequestHandler):
 class CasClientMixin(object):
     @property
     def cas_server_url(self):
-        return 'https://cas.maxiv.lu.se/cas/'
+        cas_server = config.get('cas_server')
+        self.log.info('cas_server: ' + str(cas_server))
+        return str(cas_server)
 
     @property
     def service_url(self):
@@ -3541,14 +3669,20 @@ def make_app():
     else:
         settings["debug"] = config_debug
 
+    #
     # Settings for CAS
+    #
     settings['cookie_secret'] = 'blahblah'
 
+    #
+    # Favicon junk
+    #
     favicon_path = "favicon.ico"
     print("dirname path:", os.path.dirname(__file__))
     print("favicon_path:", favicon_path)
     print('Static content in the path:' + static_path +
           " will be displayed via the url: " + static_url)
+
     print('isdebug:', settings['debug'])
 
     app = Application([
@@ -3584,6 +3718,8 @@ def make_app():
         url(r"/groups\?.*", GroupCollectionHandler),
         url(r"/groups", GroupCollectionHandler),
         url(r"/info", InfoHandler),
+        url(r"/test", MainHandler),
+        url(r"/events", EventSource, dict(source=publisher)),
         url(static_url, tornado.web.StaticFileHandler,
             {'path': static_path}),
         url(r"/(favicon\.ico)",
@@ -3642,8 +3778,36 @@ def periodicCallback():
     while not event_queue.empty():
         item = event_queue.get()
         log.info("process_queue, got: %s", item)
+
         # just add file events for now
         updateToc(item)
+
+        # Attempting to update data file specific toc file if it has changed
+        # on disk
+        if not op.basename(item).startswith('.'):
+            try:
+                with Hdf5db(item, app_logger=log) as db:
+
+                    rootUUID = db.getUUIDByPath('/')
+
+                    log.info("rootUUID: " + str(rootUUID))
+                    log.info("filePath: " + str(item))
+                    log.info("userid: " + str(1000))
+
+                    acl = db.getAcl(rootUUID, 1000)
+                    # self.verifyAcl(acl, 'read')
+                    acl["filePath"] = str(item)
+                    acl["rootUUID"] = str(rootUUID)
+
+                    log.info("acl: " + str(acl))
+
+                    # Make this information readable in json format
+                    publisher.data = json_encode(acl)
+
+            except IOError as e:
+                log.info("IOError: " + str(e.errno) + " " + str(e.strerror))
+                status = errNoToHttpStatus(e.errno)
+                raise HTTPError(status, reason=e.strerror)
 
 
 def main():
@@ -3766,10 +3930,12 @@ def main():
 
     signal.signal(signal.SIGTERM, sig_handler)
     signal.signal(signal.SIGINT, sig_handler)
+    # signal.signal(signal.SIGINT, lambda x, y: IOLoop.instance().stop())
     log.info("INITIALIZING...")
     log.info(msg)
     print(msg)
 
+    # IOLoop.instance().start()
     IOLoop.current().start()
 
 

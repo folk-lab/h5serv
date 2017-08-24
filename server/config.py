@@ -45,6 +45,8 @@ cfg = {
     'log_file': r'../log/h5serv.log',
     'log_level': 'DEBUG',  # ERROR, WARNING, INFO, DEBUG, or NOTSET,
 
+    # CAS stuff
+    'cas_server': 'https://cas.maxiv.lu.se/cas/',
     # 'cas_service': 'https://scilab.maxiv.lu.se/hdf5-web-gui/html/' + \
     'cas_service': 'https://w-jasbru-pc-0.maxiv.lu.se/hdf5-web-gui/html/' + \
                    'app.html',
