@@ -179,6 +179,26 @@ def get_next():
 ###############################################################################
 
 
+class UseCASHandler(RequestHandler):
+    '''
+    This class is made for clients to check if a CAS server is being used, and
+    if so, what the url is
+    '''
+
+    def get(self):
+        log = logging.getLogger("h5serv")
+        response = str(config.get('cas_server'))
+        log.info('RequestHandler.get ' + response)
+
+        cors_domain = config.get('cors_domain')
+        if cors_domain:
+            self.set_header('Access-Control-Allow-Origin', cors_domain)
+            self.set_header('Access-Control-Allow-Credentials', 'true')
+            self.set_header('Access-Control-Allow-Headers', 'Content-type,')
+        self.set_header('Content-Type', 'application/json')
+        self.write(json_encode(response))
+
+
 def to_bytes(a_string):
     if type(a_string) is unicode:
         return a_string.encode('utf-8')
@@ -3719,6 +3739,7 @@ def make_app():
         url(r"/groups", GroupCollectionHandler),
         url(r"/info", InfoHandler),
         url(r"/test", MainHandler),
+        url(r"/usecas", UseCASHandler),
         url(r"/events", EventSource, dict(source=publisher)),
         url(static_url, tornado.web.StaticFileHandler,
             {'path': static_path}),
