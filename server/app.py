@@ -20,6 +20,7 @@ import largeImages
 import permissions
 from pwd import getpwnam
 from grp import getgrall, getgrgid
+import getpass
 
 # Libraries for server sent events
 import signal
@@ -28,6 +29,8 @@ from tornado import web, gen
 # from tornado.httpserver import HTTPServer
 # from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError
+
+import urlparse
 
 import stat
 import numpy
@@ -285,39 +288,53 @@ class BaseHandler(tornado.web.RequestHandler):
             self.log.info("header[" + k + "]: " + self.request.headers[k])
         self.log.info('remote_ip: ' + self.request.remote_ip)
 
-        # See if there is a specific cookie with CAS information in it
-        attributes = self.get_secure_cookie('cas_attributes')
-        if attributes:
-            attributes = json.loads(attributes)
-        self.log.info(attributes)
-        self.log.info(bool(attributes))
-        self.userattributes = attributes
+        cas_server = str(config.get('cas_server'))
+        self.log.info('cas_server: [' + cas_server + ']')
+        parsed_url = urlparse.urlparse(cas_server)
+        need_authentication = bool(parsed_url.scheme)
+        self.log.info('need_authentication: [' + str(need_authentication)
+                      + ']')
 
-        if attributes:
+        if need_authentication:
 
-            self.username = attributes['userName']
-            self.log.info('self.username: ' + str(self.username))
+            # See if there is a specific cookie with CAS information in it
+            attributes = self.get_secure_cookie('cas_attributes')
+            if attributes:
+                attributes = json.loads(attributes)
+            self.log.info(attributes)
+            self.log.info(bool(attributes))
+            self.userattributes = attributes
 
-            # Get user id number from the server machine - quick fix, should
-            # really get this from CAS, but that item is not available at this
-            # time
-            self.userid = getpwnam(self.username).pw_uid
-            self.log.info('self.userid: ' + str(self.userid))
+            if attributes:
 
-            # Get the groups for this user - also a quick fix
-            self.usergroupids = [g.gr_gid for g in getgrall() if self.username
-                                 in g.gr_mem]
-            gid = getpwnam(self.username).pw_gid
-            self.usergroupids.append(getgrgid(gid).gr_gid)
+                for key, value in attributes.iteritems():
+                    self.log.info('attributes[' + str(key) + ']: ' +
+                                  str(value))
 
-            self.log.info('gid: ' + str(gid))
-            self.log.info('self.usergroupids: ' + str(self.usergroupids))
+                self.username = attributes['userName']
 
-            for key, value in attributes.iteritems():
-                self.log.info('attributes[' + str(key) + ']: ' +
-                              str(value))
+        else:
+            self.username = getpass.getuser()
 
-            return True
+        if self.username:
+                self.log.info('self.username: ' + str(self.username))
+
+                # Get user id number from the server machine - quick fix,
+                # should really get this from CAS, but that item is not
+                # available at this time
+                self.userid = getpwnam(self.username).pw_uid
+                self.log.info('self.userid: ' + str(self.userid))
+
+                # Get the groups for this user - also a quick fix
+                self.usergroupids = [g.gr_gid for g in getgrall() if
+                                     self.username in g.gr_mem]
+                gid = getpwnam(self.username).pw_gid
+                self.usergroupids.append(getgrgid(gid).gr_gid)
+
+                self.log.info('gid: ' + str(gid))
+                self.log.info('self.usergroupids: ' + str(self.usergroupids))
+
+                return True
 
         self.log.info('no logged in user')
 
@@ -3634,8 +3651,6 @@ class LogoutHandler(CasClientMixin, BaseHandler):
         self.clear_cookie('cas_attributes')
 
         # Read the cookie, hopefully no longer there
-        # self.get_current_user()
-        # self.log.info('self.username: ' + str(self.username))
         self.username = None
         self.userid = -1
         self.usergroupids = []
