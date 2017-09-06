@@ -41,7 +41,12 @@ def get_info_from_uuid(toc_file, uuid, username, debug):
     privelages to read the object
     '''
 
-    folder_name = get_folder_name_from_uuid(toc_file, uuid, debug)
+    if os.path.isfile(toc_file):
+        folder_name = get_folder_name_from_uuid(toc_file, uuid, debug)
+    else:
+        if debug:
+            print 'the toc file ' + toc_file + ' does not exist'
+        return False
 
     if not folder_name:
         # If no folder is found, assume that we're dealing with a folder within
@@ -79,7 +84,12 @@ def get_folder_name_from_uuid(toc_file, uuid, debug):
     DEBUG_MODE = debug
     OBJECT_UUID = uuid
 
-    f1 = h5py.File(toc_file, 'r')
+    if os.path.isfile(toc_file):
+        f1 = h5py.File(toc_file, 'r')
+    else:
+        if debug:
+            print 'the toc file ' + toc_file + ' does not exist'
+        return False
 
     if debug:
         print ''

@@ -18,6 +18,7 @@ import largeImages
 
 # Functions for handling linux system and CAS permissions
 import permissions
+import objectInfo
 from pwd import getpwnam
 from grp import getgrall, getgrgid
 import getpass
@@ -3825,13 +3826,19 @@ def periodicCallback():
                 with Hdf5db(item, app_logger=log) as db:
 
                     rootUUID = db.getUUIDByPath('/')
-
                     log.info("rootUUID: " + str(rootUUID))
-                    log.info("filePath: " + str(item))
-                    log.info("userid: " + str(1000))
 
+                    data_path = config.get('datapath')
+                    log.info("data_path: " + str(data_path))
+                    log.info("filePath: " + str(item))
+
+                    # TEMPORARY - need to properly check file permissions
+                    # for logged in user
+                    log.info("userid: " + str(1000))
                     acl = db.getAcl(rootUUID, 1000)
                     # self.verifyAcl(acl, 'read')
+
+                    acl["dataPath"] = str(data_path)
                     acl["filePath"] = str(item)
                     acl["rootUUID"] = str(rootUUID)
 

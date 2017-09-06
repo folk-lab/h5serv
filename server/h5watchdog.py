@@ -48,10 +48,8 @@ class H5EventHandler(FileSystemEventHandler):
                       event.src_path)
 
         ####################################################
-        # Trying some stuff....
-
-        # super(H5EventHandler, self).on_deleted(event)
-        # super(H5EventHandler, self).on_created(event)
+        # Trying some stuff.... delete the toc file associated with the data
+        # file in question, then let h5serv create a new one
 
         # Ignore directories
         if not op.isdir(event.src_path):
