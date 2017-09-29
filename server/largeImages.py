@@ -25,7 +25,7 @@ import os.path
 import cProfile
 
 # Plotting
-import matplotlib.pyplot as pyplot
+# import matplotlib.pyplot as pyplot
 
 assert hdf5plugin  # silence pyflakes
 
@@ -388,15 +388,15 @@ def main(argv):
         print ' image_masked size: ', image_out.shape
         print ' image_final size: ', image_final.shape
 
-    if args.graphical_display:
-        fig, axes = pyplot.subplots(2, 3)
-        axes[0][0].imshow(image_org)
-        axes[1][0].imshow(image_mask)
-        axes[0][1].imshow(image_out)
-        axes[1][1].imshow(numpy.log(image_out))
-        axes[0][2].imshow(image_final)
-        axes[1][2].imshow(numpy.log(image_final))
-        pyplot.show()
+    # if args.graphical_display:
+    #     fig, axes = pyplot.subplots(2, 3)
+    #     axes[0][0].imshow(image_org)
+    #     axes[1][0].imshow(image_mask)
+    #     axes[0][1].imshow(image_out)
+    #     axes[1][1].imshow(numpy.log(image_out))
+    #     axes[0][2].imshow(image_final)
+    #     axes[1][2].imshow(numpy.log(image_final))
+    #     pyplot.show()
 
 
 #######################
