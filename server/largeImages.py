@@ -8,18 +8,23 @@ Decimate large images so that they can be sent
 # IMPORT LIBRARIES ##
 #####################
 
+# HDF5
 import hdf5plugin
 import h5py
+
+# Image reduction
 from skimage.measure import block_reduce
 
+# General systems
 import argparse
 import sys
 import numpy
-
 import os.path
 
+# Profiling
 import cProfile
 
+# Plotting
 import matplotlib.pyplot as pyplot
 
 assert hdf5plugin  # silence pyflakes

@@ -183,6 +183,45 @@ def get_next():
 ###############################################################################
 
 
+class GetUUIDHandler(RequestHandler):
+    '''
+    This class is made for clients to check what the UUID is for a given
+    hdf5 object file path
+    '''
+
+    def get(self):
+
+        log = logging.getLogger("h5serv")
+        log.info('GetUUIDHandler:get() called')
+
+        # Check for an file path and hdf5 object path in the url
+        filepath = self.get_argument('filepath', None)
+        h5path = self.get_argument('h5path', None)
+        log.info('filepath: ' + str(filepath))
+        log.info('h5path: ' + str(h5path))
+
+        cors_domain = config.get('cors_domain')
+        if cors_domain:
+            self.set_header('Access-Control-Allow-Origin', cors_domain)
+            self.set_header('Access-Control-Allow-Credentials', 'true')
+            self.set_header('Access-Control-Allow-Headers', 'Content-type,')
+        self.set_header('Content-Type', 'application/json')
+
+        if filepath:
+            data_path = config.get('datapath')
+            toc_name = config.get('toc_name')
+            uuid = objectInfo.get_uuid(data_path, toc_name, filepath, h5path,
+                                       False)
+            log.info('message: ' + str(True))
+            log.info('uuid: ' + str(uuid))
+            # return self.write({'message': True, 'uuid': uuid})
+            return self.write(json_encode(str(uuid)))
+        else:
+            log.info('message: ' + str(False))
+            # return self.write({'message': False})
+            return self.write(json_encode(str(False)))
+
+
 class UseCASHandler(RequestHandler):
     '''
     This class is made for clients to check if a CAS server is being used, and
@@ -200,6 +239,7 @@ class UseCASHandler(RequestHandler):
             self.set_header('Access-Control-Allow-Credentials', 'true')
             self.set_header('Access-Control-Allow-Headers', 'Content-type,')
         self.set_header('Content-Type', 'application/json')
+
         self.write(json_encode(response))
 
 
@@ -2677,6 +2717,8 @@ class GroupHandler(BaseHandler):
         try:
             with Hdf5db(self.filePath, app_logger=self.log) as db:
                 rootUUID = db.getUUIDByPath('/')
+                self.log.info("self.reqUuid: " + str(self.reqUuid))
+                self.log.info("self.userid: " + str(self.userid))
                 acl = db.getAcl(self.reqUuid, self.userid)
                 self.verifyAcl(acl, 'read')  # throws exception is unauthorized
                 item = db.getGroupItemByUuid(self.reqUuid)
@@ -3756,6 +3798,7 @@ def make_app():
         url(r"/info", InfoHandler),
         url(r"/test", MainHandler),
         url(r"/usecas", UseCASHandler),
+        url(r"/getuuid", GetUUIDHandler),
         url(r"/events", EventSource, dict(source=publisher)),
         url(static_url, tornado.web.StaticFileHandler,
             {'path': static_path}),
@@ -3832,20 +3875,29 @@ def periodicCallback():
                     log.info("data_path: " + str(data_path))
                     log.info("filePath: " + str(item))
 
-                    # TEMPORARY - need to properly check file permissions
-                    # for logged in user
+                    # TEMPORARY - using user id 1000 - need to properly check
+                    # file permissions for logged in user
                     log.info("userid: " + str(1000))
                     acl = db.getAcl(rootUUID, 1000)
                     # self.verifyAcl(acl, 'read')
-
-                    acl["dataPath"] = str(data_path)
-                    acl["filePath"] = str(item)
-                    acl["rootUUID"] = str(rootUUID)
-
                     log.info("acl: " + str(acl))
 
+                    returnInfo = {}
+                    returnInfo["dataPath"] = str(data_path)
+                    file_path = str(item).replace(str(data_path), '')
+                    returnInfo["filePath"] = file_path
+                    returnInfo["rootUUID"] = str(rootUUID)
+
+                    log.info("returnInfo: " + str(returnInfo))
+
+                    object_list = objectInfo.list_file_contents(data_path,
+                                                                file_path,
+                                                                False)
+
+                    returnInfo["object_list"] = object_list
+
                     # Make this information readable in json format
-                    publisher.data = json_encode(acl)
+                    publisher.data = json_encode(returnInfo)
 
             except IOError as e:
                 log.info("IOError: " + str(e.errno) + " " + str(e.strerror))

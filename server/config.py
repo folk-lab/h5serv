@@ -46,8 +46,8 @@ cfg = {
     'log_level': 'DEBUG',  # ERROR, WARNING, INFO, DEBUG, or NOTSET,
 
     # CAS - set 'cas_server' to None to disable use of CAS
-    'cas_server': 'https://cas.maxiv.lu.se/cas/',
-    # 'cas_server': None,
+    # 'cas_server': 'https://cas.maxiv.lu.se/cas/',
+    'cas_server': None,
     # 'cas_service': 'https://scilab.maxiv.lu.se/hdf5-web-gui/html/' + \
     'cas_service': 'https://w-jasbru-pc-0.maxiv.lu.se/hdf5-web-gui/html/' + \
                    'app.html',
