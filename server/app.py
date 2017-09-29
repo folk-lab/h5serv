@@ -3862,47 +3862,49 @@ def periodicCallback():
         # just add file events for now
         updateToc(item)
 
-        # Attempting to update data file specific toc file if it has changed
-        # on disk
-        if not op.basename(item).startswith('.'):
-            try:
-                with Hdf5db(item, app_logger=log) as db:
+        ####################################################################
+        # # Attempting to update data file specific toc file if it has changed
+        # # on disk
+        # if not op.basename(item).startswith('.'):
+        #     try:
+        #         with Hdf5db(item, app_logger=log) as db:
 
-                    rootUUID = db.getUUIDByPath('/')
-                    log.info("rootUUID: " + str(rootUUID))
+        #             rootUUID = db.getUUIDByPath('/')
+        #             log.info("rootUUID: " + str(rootUUID))
 
-                    data_path = config.get('datapath')
-                    log.info("data_path: " + str(data_path))
-                    log.info("filePath: " + str(item))
+        #             data_path = config.get('datapath')
+        #             log.info("data_path: " + str(data_path))
+        #             log.info("filePath: " + str(item))
 
-                    # TEMPORARY - using user id 1000 - need to properly check
-                    # file permissions for logged in user
-                    log.info("userid: " + str(1000))
-                    acl = db.getAcl(rootUUID, 1000)
-                    # self.verifyAcl(acl, 'read')
-                    log.info("acl: " + str(acl))
+        #             # TEMPORARY - using user id 1000 - need to properly check
+        #             # file permissions for logged in user
+        #             log.info("userid: " + str(1000))
+        #             acl = db.getAcl(rootUUID, 1000)
+        #             # self.verifyAcl(acl, 'read')
+        #             log.info("acl: " + str(acl))
 
-                    returnInfo = {}
-                    returnInfo["dataPath"] = str(data_path)
-                    file_path = str(item).replace(str(data_path), '')
-                    returnInfo["filePath"] = file_path
-                    returnInfo["rootUUID"] = str(rootUUID)
+        #             returnInfo = {}
+        #             returnInfo["dataPath"] = str(data_path)
+        #             file_path = str(item).replace(str(data_path), '')
+        #             returnInfo["filePath"] = file_path
+        #             returnInfo["rootUUID"] = str(rootUUID)
 
-                    log.info("returnInfo: " + str(returnInfo))
+        #             log.info("returnInfo: " + str(returnInfo))
 
-                    object_list = objectInfo.list_file_contents(data_path,
-                                                                file_path,
-                                                                False)
+        #             object_list = objectInfo.list_file_contents(data_path,
+        #                                                         file_path,
+        #                                                         False)
 
-                    returnInfo["object_list"] = object_list
+        #             returnInfo["object_list"] = object_list
 
-                    # Make this information readable in json format
-                    publisher.data = json_encode(returnInfo)
+        #             # Make this information readable in json format
+        #             publisher.data = json_encode(returnInfo)
 
-            except IOError as e:
-                log.info("IOError: " + str(e.errno) + " " + str(e.strerror))
-                status = errNoToHttpStatus(e.errno)
-                raise HTTPError(status, reason=e.strerror)
+        #     except IOError as e:
+        #         log.info("IOError: " + str(e.errno) + " " + str(e.strerror))
+        #         status = errNoToHttpStatus(e.errno)
+        #         raise HTTPError(status, reason=e.strerror)
+        #####################################################################
 
 
 def main():

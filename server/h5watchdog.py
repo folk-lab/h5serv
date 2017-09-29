@@ -1,6 +1,6 @@
 # import sys
 # import time
-import os
+# import os
 import os.path as op
 import logging
 
@@ -47,34 +47,34 @@ class H5EventHandler(FileSystemEventHandler):
         self.log.info("H5EventHandler -- Modified %s: %s", what,
                       event.src_path)
 
-        ####################################################
-        # Trying some stuff.... delete the toc file associated with the data
-        # file in question, then let h5serv create a new one
+        # ####################################################
+        # # Trying some stuff.... delete the toc file associated with the data
+        # # file in question, then let h5serv create a new one
 
-        # Ignore directories
-        if not op.isdir(event.src_path):
+        # # Ignore directories
+        # if not op.isdir(event.src_path):
 
-            # Assemble the likely toc filename for this data file
-            toc_file_base_name = '.' + op.basename(event.src_path)
-            toc_file_dir_name = op.dirname(event.src_path)
-            toc_file_full_name = toc_file_dir_name + '/' + toc_file_base_name
+        #     # Assemble the likely toc filename for this data file
+        #     toc_file_base_name = '.' + op.basename(event.src_path)
+        #     toc_file_dir_name = op.dirname(event.src_path)
+        #     toc_file_full_name = toc_file_dir_name + '/' + toc_file_base_name
 
-            self.log.info('  toc_file_base_name: ' + toc_file_base_name)
-            self.log.info('  toc_file_dir_name:  ' + toc_file_dir_name)
-            self.log.info('  toc_file_full_name: ' + toc_file_full_name)
+        #     self.log.info('  toc_file_base_name: ' + toc_file_base_name)
+        #     self.log.info('  toc_file_dir_name:  ' + toc_file_dir_name)
+        #     self.log.info('  toc_file_full_name: ' + toc_file_full_name)
 
-            # Remove the toc file for this data file, if it exists
-            if op.isfile(toc_file_full_name):
-                self.log.info('  toc file ' + toc_file_full_name + ' exists')
-                os.remove(toc_file_full_name)
-            else:
-                self.log.info('  toc file ' + toc_file_full_name +
-                              ' does not exist')
+        #     # Remove the toc file for this data file, if it exists
+        #     if op.isfile(toc_file_full_name):
+        #         self.log.info('  toc file ' + toc_file_full_name + ' exists')
+        #         os.remove(toc_file_full_name)
+        #     else:
+        #         self.log.info('  toc file ' + toc_file_full_name +
+        #                       ' does not exist')
 
-            # Update the toc file ?
-            self.event_queue.put(event.src_path)
+        #     # Update the toc file ?
+        #     self.event_queue.put(event.src_path)
 
-        ####################################################
+        # ####################################################
 
 
 #
