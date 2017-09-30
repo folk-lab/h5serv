@@ -2121,7 +2121,7 @@ class ValueHandler(BaseHandler):
                         self.log.info('dims: ' + str(dims))
                         self.log.info('filePath: ' + self.filePath)
                         values = largeImages.decimate_if_necessary(
-                            values, slices, 8e4, self.filePath, True, True)
+                            values, slices, 4e4, self.filePath, True, True)
                         ##################################
 
                 else:
