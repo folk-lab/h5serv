@@ -40,7 +40,7 @@ os.chdir(test_dir)
 os.chdir('unit')
 for file_name in unit_tests:
     print(file_name)
-    rc = os.system('python ' + file_name + '.py')
+    rc = os.system('python3 ' + file_name + '.py')
     if rc != 0:
         os.chdir(cwd)
         sys.exit("Failed")
@@ -49,12 +49,12 @@ for file_name in unit_tests:
 os.chdir('../integ')
 
 if integ_tests:
-    os.system("python ./setupdata.py -f")  # initialize data files
+    os.system("python3 ./setupdata.py -f")  # initialize data files
     
 for file_name in integ_tests:
     print(file_name)
     log_file = "../../log/h5serv.log"
-    rc = os.system('python ' + file_name + '.py')
+    rc = os.system('python3 ' + file_name + '.py')
     if rc != 0:    
         if os.name != 'nt' and os.path.isfile(log_file):
             # tail not available on windows
