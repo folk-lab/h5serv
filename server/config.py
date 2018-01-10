@@ -15,9 +15,9 @@ import sys
 cfg = {
     'port':   5000,
     'debug':  True,
-    'datapath': '../data/',
+    'datapath': '../data',
     'public_dir': ['public', 'test'],
-    'domain':  'hdfgroup.org',
+    'domain':  'localhost',
     'hdf5_ext': '.h5',
     'toc_name': '.toc.h5',
     'home_dir': 'home',
@@ -30,8 +30,8 @@ cfg = {
     'mongo_dbname': 'hdfdevtest',
     'static_url': r'/views/(.*)',
     'static_path': r'../static',
-    'cors_domain': '*',  # set to None to disallow CORS (cross-origin resource sharing)
-    'log_file': r'../log/h5serv.log',
+    'cors_domain': None,  # set to None to disallow CORS (cross-origin resource sharing)
+    'log_file': None,
     'log_level': 'INFO', # ERROR, WARNING, INFO, DEBUG, or NOTSET,
     'background_timeout': 1000,  # (ms) set to 0 to disable background processing
     'new_domain_policy': 'ANON',  # Ability to create domains (files) on serv: ANON - anonymous users ok, AUTH - only authenticated, NEVER - never allow 
