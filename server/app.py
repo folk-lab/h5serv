@@ -98,6 +98,7 @@ class BaseHandler(tornado.web.RequestHandler):
         cors_domain = config.get('cors_domain')
         if cors_domain:
             self.set_header('Access-Control-Allow-Origin', cors_domain)
+            self.set_header('Access-Control-Allow-Credentials', 'true')
      
     """
     Set allows heards per CORS policy
