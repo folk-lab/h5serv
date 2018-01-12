@@ -3921,14 +3921,14 @@ def main():
     if log_file:
         print("Using logfile: ", log_file)
         # set daily rotating log
-
+        
         handler = logging.handlers.TimedRotatingFileHandler(
             log_file,
             when="midnight",
             interval=1,
             backupCount=0,
             utc=True)
-
+  
         # add formatter to handler
         # create formatter
         formatter = logging.Formatter(
@@ -3936,8 +3936,6 @@ def main():
         handler.setFormatter(formatter)
         # add handler to logger
         log.addHandler(handler)
-    else:
-        print("No logfile")
 
     # add default logger (to stdout)
     handler = logging.StreamHandler(sys.stdout)

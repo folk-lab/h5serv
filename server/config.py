@@ -35,7 +35,7 @@ cfg = {
     'cors_domain': 'http://127.0.0.1:8080', # set to None to disallow CORS (cross-origin resource sharing)
 
     'debug':  True,
-    'log_file': r'../logs/h5serv.log',
+    'log_file': r'../log/h5serv.log',
     'log_level': 'debug', # ERROR, WARNING, INFO, DEBUG, or NOTSET,
     
     'background_timeout': 1000,  # (ms) set to 0 to disable background processing
