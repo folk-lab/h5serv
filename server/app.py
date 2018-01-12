@@ -330,7 +330,7 @@ class BaseHandler(tornado.web.RequestHandler):
 
         cas_server = str(config.get('cas_server'))
         self.log.info('cas_server: [' + cas_server + ']')
-        parsed_url = urlprase(cas_server)
+        parsed_url = urlparse(cas_server)
         need_authentication = bool(parsed_url.scheme)
         self.log.info('need_authentication: [' + str(need_authentication)
                       + ']')
