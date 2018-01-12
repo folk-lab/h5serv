@@ -45,7 +45,7 @@ def get_info_from_uuid(toc_file, uuid, username, debug):
         folder_name = get_folder_name_from_uuid(toc_file, uuid, debug)
     else:
         if debug:
-            print 'the toc file ' + toc_file + ' does not exist'
+            print('the toc file ' + toc_file + ' does not exist')
         return False
 
     if not folder_name:
@@ -67,16 +67,16 @@ def find_group(name):
 
 
 def print_attrs(name, obj):
-    print name
+    print(name)
     for key, val in obj.attrs.iteritems():
-        print "    %s: %s" % (key, val)
+        print("    %s: %s" % (key, val))
 
 
 def get_folder_name_from_uuid(toc_file, uuid, debug):
 
     if debug:
-        print '**** FIND ITEM ****'
-        print ''
+        print('**** FIND ITEM ****')
+        print('')
 
     # Set some global variables
     global DEBUG_MODE
@@ -88,19 +88,19 @@ def get_folder_name_from_uuid(toc_file, uuid, debug):
         f1 = h5py.File(toc_file, 'r')
     else:
         if debug:
-            print 'the toc file ' + toc_file + ' does not exist'
+            print('the toc file ' + toc_file + ' does not exist')
         return False
 
     if debug:
-        print ''
-        print '**** PRINT ATTRS ****'
-        print ''
+        print('')
+        print('**** PRINT ATTRS ****')
+        print('')
         f1.visititems(print_attrs)
 
     my_item = f1.visititems(get_folder_reference)
 
     if debug:
-        print 'my_item: ' + str(my_item)
+        print('my_item: ' + str(my_item))
 
     if my_item is None:
         return False
@@ -110,7 +110,7 @@ def get_folder_name_from_uuid(toc_file, uuid, debug):
     folder_name = '../data' + mygroup2.name
 
     if debug:
-        print 'folder_name: ' + str(folder_name)
+        print('folder_name: ' + str(folder_name))
 
     return folder_name
 
@@ -127,8 +127,8 @@ def get_folder_reference(name, obj):
         if OBJECT_UUID in str(key) and '{groups}' in name:
 
             if DEBUG_MODE:
-                print name
-                print "    %s: %s" % (key, val)
+                print(name)
+                print("    %s: %s" % (key, val))
 
             return val
 
@@ -139,15 +139,15 @@ def get_user_info(username, debug):
     '''
 
     if debug:
-        print '**** FIND USER INFO ****'
-        print ''
-        print 'username: ' + str(username)
+        print('**** FIND USER INFO ****')
+        print('')
+        print('username: ' + str(username))
 
     # Get user id number - quick fix, Should really get this from CAS,
     # but that item is not available at this time...
     userid = getpwnam(username).pw_uid
     if debug:
-        print 'userid: ' + str(userid)
+        print('userid: ' + str(userid))
 
     # Get the groups - also a quick fix
     # The group id numbers for all groups for this user
@@ -158,8 +158,8 @@ def get_user_info(username, debug):
     usergroupids.append(getgrgid(gid).gr_gid)
 
     if debug:
-        print 'gid: ' + str(gid)
-        print 'usergroupids: ' + str(usergroupids)
+        print('gid: ' + str(gid))
+        print('usergroupids: ' + str(usergroupids))
 
     return userid, usergroupids
 
@@ -171,9 +171,9 @@ def can_user_read_file(filepath, userid, usergroupids, debug):
     '''
 
     if debug:
-        print '**** FIND ITEM ****'
-        print ''
-        print "actual file or folder?: " + str(filepath)
+        print('**** FIND ITEM ****')
+        print('')
+        print("actual file or folder?: " + str(filepath))
 
     readable = False
     readable_as_owner = False
@@ -187,14 +187,14 @@ def can_user_read_file(filepath, userid, usergroupids, debug):
 
     # Check if this is a file or directory
     if debug:
-        print 'stat.S_ISDIR(mode): ' + str(stat.S_ISDIR(mode))
-        print 'stat.S_ISREG(mode): ' + str(stat.S_ISREG(mode))
-        print 'stat.S_ISLNK(mode): ' + str(stat.S_ISLNK(mode))
+        print('stat.S_ISDIR(mode): ' + str(stat.S_ISDIR(mode)))
+        print('stat.S_ISREG(mode): ' + str(stat.S_ISREG(mode)))
+        print('stat.S_ISLNK(mode): ' + str(stat.S_ISLNK(mode)))
 
     # Check if the user is the owner and has read permissions
     if debug:
-        print 'uid:          ' + str(uid)
-        print 'userid:       ' + str(userid)
+        print('uid:          ' + str(uid))
+        print('userid:       ' + str(userid))
 
     if uid == userid:
         user_readable = bool(mode & stat.S_IRUSR)
@@ -203,8 +203,8 @@ def can_user_read_file(filepath, userid, usergroupids, debug):
 
     # Check if the user is in the right group and has read permissions
     if debug:
-        print 'gid:          ' + str(gid)
-        print 'usergroupids: ' + str(usergroupids)
+        print('gid:          ' + str(gid))
+        print('usergroupids: ' + str(usergroupids))
 
     if gid in usergroupids:
         group_readable = bool(mode & stat.S_IRGRP)
@@ -215,9 +215,9 @@ def can_user_read_file(filepath, userid, usergroupids, debug):
     readable_by_other = bool(mode & stat.S_IROTH)
 
     if debug:
-        print 'readable_as_owner: ' + str(readable_as_owner)
-        print 'readable_by_group: ' + str(readable_by_group)
-        print 'readable_by_other: ' + str(readable_by_other)
+        print('readable_as_owner: ' + str(readable_as_owner))
+        print('readable_by_group: ' + str(readable_by_group))
+        print('readable_by_other: ' + str(readable_by_other))
 
     if readable_as_owner or readable_by_group or readable_by_other:
         readable = True
@@ -225,7 +225,7 @@ def can_user_read_file(filepath, userid, usergroupids, debug):
         readable = False
 
     if debug:
-        print 'readable: ' + str(readable)
+        print('readable: ' + str(readable))
 
     return readable
 
@@ -259,21 +259,21 @@ def main(argv):
         try:
             args = parser.parse_args(['-h'])
         except SystemExit:
-            print ''
-            print 'Examples of usage:'
-            print ''
-            print '  python largeImages.py tau1-tau_2_data_000001.h5'
+            print('')
+            print('Examples of usage:')
+            print('')
+            print('  python largeImages.py tau1-tau_2_data_000001.h5')
             sys.exit()
     else:
         args = parser.parse_args(argv)
 
     if args.debug:
-        print args
+        print(args)
 
     readable = get_info_from_uuid(args.toc_file, args.uuid, args.username,
                                   args.debug)
 
-    print 'readable: ' + str(readable)
+    print('readable: ' + str(readable))
 
 
 #######################

@@ -63,7 +63,7 @@ def get_image(fileName, dataset_name, slices, debug):
     f1.close()
 
     if debug:
-        print 'image size: ', image.shape
+        print('image size: ', image.shape)
 
     return image
 
@@ -92,7 +92,7 @@ def get_series_image(fileName, dataset_name, image_index, slices, debug):
     f1.close()
 
     if debug:
-        print 'image size: ', image.shape
+        print('image size: ', image.shape)
 
     return image
 
@@ -152,8 +152,8 @@ def decimate_image(originalImage, image_size_limit, data_type,
         pr.disable()
         pr.print_stats(sort='time')
 
-        print 'image size: ', image_sum.shape
-        print image_sum
+        print('image size: ', image_sum.shape)
+        print(image_sum)
 
     return image_sum
 
@@ -184,11 +184,11 @@ def get_data_type(values, debug):
         data_type = len(value_dimensions)
 
         if debug:
-            print '  shape: ', values.shape
+            print('  shape: ', values.shape)
 
     if debug:
-        print '  data_type: ', data_type
-        print '  value_dimensions: ', value_dimensions
+        print('  data_type: ', data_type)
+        print('  value_dimensions: ', value_dimensions)
 
     return data_type, value_dimensions
 
@@ -206,7 +206,7 @@ def check_image_size(data_type, value_dimensions, size_limit, debug):
             is_big_image = True
 
     if debug:
-        print '  is_big_image: ', is_big_image
+        print('  is_big_image: ', is_big_image)
 
     return is_big_image
 
@@ -214,7 +214,7 @@ def check_image_size(data_type, value_dimensions, size_limit, debug):
 def check_if_mx_file(file_path, debug):
 
     if debug:
-        print 'check_if_mx_file.file_path:' + file_path
+        print('check_if_mx_file.file_path:' + file_path)
 
     is_mx_file = False
     master_file_path = False
@@ -224,7 +224,7 @@ def check_if_mx_file(file_path, debug):
         data_file_name = file_pieces[-1]
 
         if debug:
-            print 'data_file_name: ' + data_file_name
+            print('data_file_name: ' + data_file_name)
 
         is_mx_file = True
 
@@ -239,9 +239,9 @@ def check_if_mx_file(file_path, debug):
         does_master_file_exist = os.path.isfile(master_file_path)
 
         if debug:
-            print 'master_file_name: ' + master_file_name
-            print 'master_file_path: ' + master_file_path
-            print 'does_master_file_exist: ' + str(does_master_file_exist)
+            print('master_file_name: ' + master_file_name)
+            print('master_file_path: ' + master_file_path)
+            print('does_master_file_exist: ' + str(does_master_file_exist))
 
     return is_mx_file, master_file_path
 
@@ -249,7 +249,7 @@ def check_if_mx_file(file_path, debug):
 def get_image_mask(master_file_path, slices, debug):
 
     if debug:
-        print 'get_image_mask.master_file_path:' + master_file_path
+        print('get_image_mask.master_file_path:' + master_file_path)
 
     mask_image = 'entry/instrument/detector/detectorSpecific/pixel_mask'
 
@@ -262,8 +262,8 @@ def decimate_if_necessary(values, slices, image_size_limit, file_path,
                           output_list, debug):
 
     if debug:
-        print '  type: ' + str(type(values))
-        print '  slices: ' + str(slices)
+        print('  type: ' + str(type(values)))
+        print('  slices: ' + str(slices))
 
     # The input type is assumed to be numpy.ndarray, could also be a list, but
     # if it's neither of these, just return the input
@@ -346,16 +346,16 @@ def main(argv):
         try:
             args = parser.parse_args(['-h'])
         except SystemExit:
-            print ''
-            print 'Examples of usage:'
-            print ''
-            print '  python largeImages.py tau1-tau_2_data_000001.h5'
+            print('')
+            print('Examples of usage:')
+            print('')
+            print('  python largeImages.py tau1-tau_2_data_000001.h5')
             sys.exit()
     else:
         args = parser.parse_args(argv)
 
     if args.debug:
-        print args
+        print(args)
 
     # Use slices for zooming
     slices = [slice(0, 1, 1), slice(1903, 2993, 1), slice(2073, 2969, 1)]
@@ -383,10 +383,10 @@ def main(argv):
                                         args.input_file[0], False, args.debug)
 
     if args.debug:
-        print ' image_org size: ', image_org.shape
-        print ' image_mask size: ', image_mask.shape
-        print ' image_masked size: ', image_out.shape
-        print ' image_final size: ', image_final.shape
+        print(' image_org size: ', image_org.shape)
+        print(' image_mask size: ', image_mask.shape)
+        print(' image_masked size: ', image_out.shape)
+        print(' image_final size: ', image_final.shape)
 
     # if args.graphical_display:
     #     fig, axes = pyplot.subplots(2, 3)

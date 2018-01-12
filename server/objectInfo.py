@@ -34,14 +34,14 @@ LIST_OF_OBJECTS = []
 def add_to_list_of_objects(name, obj):
 
     if DEBUG:
-        print '  -> ' + name
+        print('  -> ' + name)
 
     global LIST_OF_OBJECTS
     LIST_OF_OBJECTS.append(name)
 
     if DEBUG:
         for key, val in obj.attrs.iteritems():
-            print "    -> %s: %s" % (key, val)
+            print("    -> %s: %s" % (key, val))
 
 
 def list_file_contents(data_path, input_file, debug):
@@ -54,12 +54,12 @@ def list_file_contents(data_path, input_file, debug):
     # Open the file, see what's there
     input_file = data_path + input_file
     if debug:
-        print 'input_file: ' + input_file
+        print('input_file: ' + input_file)
     f2 = h5py.File(input_file, 'r')
     f2.visititems(add_to_list_of_objects)
     f2.close()
     for name in LIST_OF_OBJECTS:
-        print name
+        print(name)
 
     return LIST_OF_OBJECTS
 
@@ -73,8 +73,8 @@ def get_uuid(data_path, toc_name, file_path, h5_path, debug):
     file_path = data_path + file_path
     toc_name = data_path + toc_name
     if debug:
-        print 'file_path: ' + file_path
-        print 'toc_name: ' + toc_name
+        print('file_path: ' + file_path)
+        print('toc_name: ' + toc_name)
 
     uuid = False
 
@@ -85,13 +85,13 @@ def get_uuid(data_path, toc_name, file_path, h5_path, debug):
         if str(h5_path) == '' or str(h5_path) is None or \
                 str(h5_path) == 'None':
             if debug:
-                print 'calling get_uuid_file'
+                print('calling get_uuid_file')
             uuid = get_uuid_file(file_path, debug)
 
         # An object within a file
         else:
             if debug:
-                print 'calling get_uuid_h5object'
+                print('calling get_uuid_h5object')
             uuid = get_uuid_h5object(file_path, h5_path, debug)
 
     # Is this a folder?
@@ -121,13 +121,13 @@ def get_uuid_dir(toc_name, file_path, debug):
     F1 = h5py.File(toc_name, 'r')
 
     if debug:
-        print ''
-        print '**** PRINT ATTRS ****'
-        print ''
+        print('')
+        print('**** print ATTRS ****')
+        print('')
         F1.visititems(print_attrs)
-        print ''
-        print '**** FIND_DIR ****'
-        print ''
+        print('')
+        print('**** FIND_DIR ****')
+        print('')
 
     uuid = F1.visititems(find_dir)
 
@@ -135,7 +135,7 @@ def get_uuid_dir(toc_name, file_path, debug):
     F1.close()
 
     if debug:
-        print 'uuid: ' + str(uuid)
+        print('uuid: ' + str(uuid))
 
     if uuid is None:
         return False
@@ -149,7 +149,7 @@ def get_uuid_file(file_path, debug):
     toc_name_full_name = os.path.dirname(file_path) + '/.' + \
         os.path.basename(file_path)
     if debug:
-        print 'toc_name_full_name: ' + toc_name_full_name
+        print('toc_name_full_name: ' + toc_name_full_name)
 
     # Check if the data file's toc file exists
     if not os.path.isfile(toc_name_full_name):
@@ -159,15 +159,15 @@ def get_uuid_file(file_path, debug):
     f1 = h5py.File(toc_name_full_name, 'r')
 
     if debug:
-        print ''
-        print '**** PRINT ATTRS ****'
-        print ''
+        print('')
+        print('**** PRINT ATTRS ****')
+        print('')
         f1.visititems(print_attrs)
 
     uuid = f1.visititems(find_file)
 
     if debug:
-        print 'uuid: ' + str(uuid)
+        print('uuid: ' + str(uuid))
 
     if uuid is None:
         return False
@@ -184,13 +184,13 @@ def get_uuid_h5object(file_path, h5_path, debug):
     H5PATH = '/' + h5_path
 
     if debug:
-        print 'H5PATH: ' + H5PATH
+        print('H5PATH: ' + H5PATH)
 
     # Assemble the likely toc filename for this data file
     toc_name_full_name = os.path.dirname(file_path) + '/.' + \
         os.path.basename(file_path)
     if debug:
-        print 'toc_name_full_name: ' + toc_name_full_name
+        print('toc_name_full_name: ' + toc_name_full_name)
 
     # Check if the data file's toc file exists
     if not os.path.isfile(toc_name_full_name):
@@ -200,15 +200,15 @@ def get_uuid_h5object(file_path, h5_path, debug):
     f1 = h5py.File(toc_name_full_name, 'r')
 
     if debug:
-        print ''
-        print '**** PRINT ATTRS ****'
-        print ''
+        print('')
+        print('**** print ATTRS ****')
+        print('')
         f1.visititems(print_attrs)
 
     uuid = f1.visititems(find_h5_object_uuid)
 
     if debug:
-        print 'uuid: ' + str(uuid)
+        print('uuid: ' + str(uuid))
 
     if uuid is None:
         return False
@@ -218,9 +218,9 @@ def get_uuid_h5object(file_path, h5_path, debug):
 
 def print_attrs(name, obj):
 
-    print '* name: ' + name
+    print('* name: ' + name)
     for key, val in obj.attrs.iteritems():
-        print "    %s: %s" % (key, val)
+        print("    %s: %s" % (key, val))
 
 
 def find_dir(name, obj):
@@ -230,13 +230,13 @@ def find_dir(name, obj):
     # Look for a st of group == folders
     if '{groups}' in name:
         if DEBUG_MODE:
-            print name
+            print(name)
 
         for key, val in obj.attrs.iteritems():
 
             if DEBUG_MODE:
-                print ""
-                print "    %s: %s" % (key, val)
+                print("")
+                print("    %s: %s" % (key, val))
 
             # return key
 
@@ -249,15 +249,15 @@ def find_dir(name, obj):
             chopped_string = chopped_string[1][1:]
 
             if DEBUG_MODE:
-                print 'object:      ' + stupid_string
-                print 'parsed:      ' + chopped_string
-                print 'looking for: ' + str(DIRPATH)
+                print('object:      ' + stupid_string)
+                print('parsed:      ' + chopped_string)
+                print('looking for: ' + str(DIRPATH))
 
             # See if this is what we're after
             if str(DIRPATH) == chopped_string:
                 if DEBUG_MODE:
-                    print "    %s: %s" % (key, val)
-                    print 'Yeah!'
+                    print("    %s: %s" % (key, val))
+                    print('Yeah!')
 
                 return key
 
@@ -270,12 +270,12 @@ def find_file(name, obj):
     # give the correct uuid...
     if '{mtime}' in name:
         if DEBUG_MODE:
-            print name
+            print(name)
 
         for key, val in obj.attrs.iteritems():
             if DEBUG_MODE:
-                print "    %s: %s" % (key, val)
-                print 'Yeah!'
+                print("    %s: %s" % (key, val))
+                print('Yeah!')
 
             return key
 
@@ -288,16 +288,16 @@ def find_h5_object_reference(name, obj):
     # (images, text, etc.) that are in this file
     if '{groups}' in name or '{datasets}' in name:
         if DEBUG_MODE:
-            print name
+            print(name)
 
         for key, val in obj.attrs.iteritems():
             if DEBUG_MODE:
-                print "    %s: %s" % (key, val)
+                print("    %s: %s" % (key, val))
 
             if str(H5PATH) == str(val):
 
                 if DEBUG_MODE:
-                    print 'Yeah!'
+                    print('Yeah!')
 
                 return key
 
@@ -310,16 +310,16 @@ def find_h5_object_uuid(name, obj):
     # (images, text, etc.) that are in this file
     if '{groups}' in name or '{datasets}' in name:
         if DEBUG_MODE:
-            print name
+            print(name)
 
         for key, val in obj.attrs.iteritems():
             if DEBUG_MODE:
-                print "    %s: %s" % (key, val)
+                print("    %s: %s" % (key, val))
 
             if str(H5PATH) == str(val):
 
                 if DEBUG_MODE:
-                    print 'Yeah!'
+                    print('Yeah!')
 
                 return key
 
@@ -360,30 +360,30 @@ def main(argv):
         try:
             args = parser.parse_args(['-h'])
         except SystemExit:
-            print ''
-            print 'Examples of usage:'
-            print ''
-            print('python ../server/objectInfo.py -f example-subfolder/'
-                  'new-file.h5 -h5 scan_1/data_1/image_0000 -u')
-            print 'python ../../server/objectInfo.py -f new-file.h5 -l'
+            print('')
+            print('Examples of usage:')
+            print('')
+            print('python ../server/objectInfo.py -f example-subfolder/')
+            print('new-file.h5 -h5 scan_1/data_1/image_0000 -u')
+            print('python ../../server/objectInfo.py -f new-file.h5 -l')
             sys.exit()
     else:
         args = parser.parse_args(argv)
 
     if args.debug:
-        print args
+        print(args)
 
     if args.get_uuid:
         uuid = get_uuid(args.data_path, args.toc_name, args.file_path,
                         args.h5_path, args.debug)
 
-        print 'uuid: ' + str(uuid)
+        print('uuid: ' + str(uuid))
 
     if args.list_contents:
         my_list = list_file_contents(args.data_path, args.file_path,
                                      args.debug)
         if args.debug:
-            print my_list
+            print(my_list)
 
 
 #######################

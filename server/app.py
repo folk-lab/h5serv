@@ -31,8 +31,6 @@ from tornado import web, gen
 # from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError
 
-import urlparse
-
 import stat
 import numpy
 import time
@@ -59,6 +57,7 @@ from httpErrorUtil import errNoToHttpStatus
 from h5watchdog import h5observe
 from passwordUtil import getAuthClient
 import urllib
+from urllib.parse import urlparse
 import json
 import six
 if six.PY3:
@@ -331,7 +330,7 @@ class BaseHandler(tornado.web.RequestHandler):
 
         cas_server = str(config.get('cas_server'))
         self.log.info('cas_server: [' + cas_server + ']')
-        parsed_url = urlparse.urlparse(cas_server)
+        parsed_url = urlprase(cas_server)
         need_authentication = bool(parsed_url.scheme)
         self.log.info('need_authentication: [' + str(need_authentication)
                       + ']')
