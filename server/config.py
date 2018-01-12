@@ -14,48 +14,40 @@ import sys
 
 cfg = {
     'port':   5000,
-    'debug':  True,
-    'datapath': '../data/',
-    'public_dir': ['example-subfolder'],
 
-    # 'domain':  'scilab.maxiv.lu.se',
-    'domain':  'w-jasbru-pc-0.maxiv.lu.se',
-
+    'home_dir': 'home',
+    'datapath': '../data',
+    'public_dir': ['public', 'test'],
+    'domain':  'localhost',
     'hdf5_ext': '.h5',
     'toc_name': '.toc.h5',
-    'home_dir': 'home',
+    
     'ssl_port': 6050,
-
-    # 'ssl_cert': 'scilab_maxiv_lu_se.crt',
-    # 'ssl_key':  'scilab_maxiv_lu_se.key',
-    'ssl_cert': 'w-jasbru-pc-0_maxiv_lu_se.crt',
-    'ssl_key':  'w-jasbru-pc-0_maxiv_lu_se.key',
-
+    'ssl_cert': './certs/cert.pem', # add relative path to cert for SSL
+    'ssl_key':  './certs/key.pem', # add relative path to cert key for SSL
     'ssl_cert_pwd': '',
-    'password_uri': '../util/admin/passwd.h5',
-    'mongo_dbname': 'hdfdevtest',
+    'password_uri': '../util/admin/passwd.h5',     
+
     'static_url': r'/views/(.*)',
     'static_path': r'../static',
 
-    # set to None to disallow CORS (cross-origin resource sharing)
-    # 'cors_domain': '*',
-    # 'cors_domain': 'https://scilab.maxiv.lu.se',
-    'cors_domain': 'https://w-jasbru-pc-0.maxiv.lu.se',
+    # lots of things depend on choice of cors_domain
+    'cors_domain': 'http://127.0.0.1:8080', # set to None to disallow CORS (cross-origin resource sharing)
 
-    'log_file': r'../log/h5serv.log',
-    'log_level': 'DEBUG',  # ERROR, WARNING, INFO, DEBUG, or NOTSET,
-
+    'debug':  True,
+    'log_file': r'../logs/h5serv.log',
+    'log_level': 'debug', # ERROR, WARNING, INFO, DEBUG, or NOTSET,
+    
+    'background_timeout': 1000,  # (ms) set to 0 to disable background processing
+    
     # CAS - set 'cas_server' to None to disable use of CAS
-    # 'cas_server': 'https://cas.maxiv.lu.se/cas/',
     'cas_server': None,
-    # 'cas_service': 'https://scilab.maxiv.lu.se/hdf5-web-gui/html/' + \
-    'cas_service': 'https://w-jasbru-pc-0.maxiv.lu.se/hdf5-web-gui/html/' + \
-                   'app.html',
+    # 'cas_service': ''
 
-    # (ms) set to 0 to disable background processing
-    'background_timeout': 1000,
+    # may not be used anymore
+#     'new_domain_policy': 'ANON',  # Ability to create domains (files) on serv: ANON - anonymous users ok, AUTH - only authenticated, NEVER - never allow 
+#     'allow_noauth': True  # Allow anonymous requests (i.e. without auth header)
 }
-
 
 def get(x):
 
