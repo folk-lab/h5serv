@@ -23,8 +23,8 @@ cfg = {
     'toc_name': '.toc.h5',
     
     'ssl_port': 6050,
-    'ssl_cert': './certs/cert.pem', # add relative path to cert for SSL
-    'ssl_key':  './certs/key.pem', # add relative path to cert key for SSL
+    'ssl_cert': '/Users/nik/Dropbox/Repos/certs/cert.pem', # add relative path to cert for SSL
+    'ssl_key':  '/Users/nik/Dropbox/Repos/certs/key.pem', # add relative path to cert key for SSL
     'ssl_cert_pwd': '',
     'password_uri': '../util/admin/passwd.h5',     
 
