@@ -14,28 +14,32 @@ import sys
 
 cfg = {
     'port':   5000,
-    'debug':  True,
-    'datapath': '../data/',
-    'public_dir': ['public', 'test'],
-    'domain':  'hdfgroup.org',
+
+    'home_dir': 'home',
+    'datapath': '../data',
+    'public_dir': ['test', 'public'],
+    'domain':  'localhost',
     'hdf5_ext': '.h5',
     'toc_name': '.toc.h5',
-    'home_dir': 'home',
+    
     'ssl_port': 6050,
-    'ssl_cert': '',  # certs/data.hdfgroup.org.crt',  # add relative path to cert for SSL
-    'ssl_key':  '',  # certs/data.hdfgroup.org.key',  # add relative path to cert key for SSL
+    'ssl_cert': '/Users/nik/Dropbox/Repos/certs/cert.pem', # add relative path to cert for SSL
+    'ssl_key':  '/Users/nik/Dropbox/Repos/certs/key.pem', # add relative path to cert key for SSL
     'ssl_cert_pwd': '',
     'password_uri': '../util/admin/passwd.h5',     
-    #'password_uri': 'mongodb://mongo:27017',
-    'mongo_dbname': 'hdfdevtest',
+
     'static_url': r'/views/(.*)',
     'static_path': r'../static',
-    'cors_domain': '*',  # set to None to disallow CORS (cross-origin resource sharing)
-    'log_file': r'../log/h5serv.log',
-    'log_level': 'INFO', # ERROR, WARNING, INFO, DEBUG, or NOTSET,
-    'background_timeout': 1000  # (ms) set to 0 to disable background processing
-}
 
+    'cors_domain': 'http://127.0.0.1:8080', # set to None to disallow CORS (cross-origin resource sharing)
+
+    'debug':  True,
+    'log_file': r'../logs/h5serv.log',
+    'log_level': 'DEBUG', # ERROR, WARNING, INFO, DEBUG, or NOTSET,
+    
+    'background_timeout': 1000,  # (ms) set to 0 to disable background processing
+
+}
 
 def get(x):
     # see if there is a command-line override
