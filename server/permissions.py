@@ -123,7 +123,7 @@ def get_folder_reference(name, obj):
     returning once it is found should be ok...
     '''
 
-    for key, val in obj.attrs.iteritems():
+    for key, val in obj.attrs.items():
         if OBJECT_UUID in str(key) and '{groups}' in name:
 
             if DEBUG_MODE:
