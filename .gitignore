@@ -4,3 +4,4 @@ data/*.h5
 data/*.db
 test/unit/*.h5
 test/unit/*.db
+logs/*.log*
